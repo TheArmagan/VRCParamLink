@@ -12,6 +12,8 @@ export const HEARTBEAT_INTERVAL_MS = 5_000
 export const HEARTBEAT_TIMEOUT_MS = 10_000
 export const SUPPORTED_OSC_PREFIX = '/avatar'
 export const AVATAR_PARAMS_PREFIX = '/avatar/parameters/'
+export const AVATAR_CHANGE_OSC_ADDRESS = '/avatar/change'
+export const PARAM_LIST_MAX_SIZE = 50
 
 /**
  * VRChat built-in avatar parameters that should never be synced.
@@ -113,7 +115,9 @@ export const IPC_CHANNELS = {
   leaveRoom: 'app:leave-room',
   takeOwner: 'app:take-owner',
   updateRoomSettings: 'app:update-room-settings',
-  stateChanged: 'app:state-changed'
+  stateChanged: 'app:state-changed',
+  toggleParamSync: 'app:toggle-param-sync',
+  editParam: 'app:edit-param'
 } as const
 
 const ROOM_CODE_PATTERN = new RegExp(`^[A-Z0-9]{${ROOM_CODE_LENGTH}}$`)

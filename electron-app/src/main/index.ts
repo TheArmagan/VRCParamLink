@@ -2,8 +2,8 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { IPC_CHANNELS } from '../../../shared/src/index.ts'
-import { getAppState, updateDisplayName } from './lib/app-state.ts'
+import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
+import { applySelfAvatarChange, getAppState, setParamSyncEnabled, updateDisplayName } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 
@@ -20,6 +20,11 @@ const oscSync = new OscSyncService({
     if (!result.ok) {
       broadcastAppState()
     }
+  },
+  onAvatarChange: (avatarId) => {
+    applySelfAvatarChange(avatarId)
+    backendClient.sendAvatarChange(avatarId)
+    broadcastAppState()
   },
   onError: (error) => {
     console.error('[osc] sync error', error)
@@ -125,6 +130,15 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.updateRoomSettings, async (_event, settings) => {
     return backendClient.updateRoomSettings(settings)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.toggleParamSync, async (_event, path: string, enabled: boolean) => {
+    setParamSyncEnabled(path, enabled)
+    broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.editParam, async (_event, param: ParamValue) => {
+    oscSync.sendSingleParam(param)
   })
 }
 

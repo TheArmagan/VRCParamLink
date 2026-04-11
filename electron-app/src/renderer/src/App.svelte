@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import type {
     FilterMode,
+    ParamValue,
     RendererAppState,
   } from "../../../../shared/src/index.ts";
   import AppHeader from "./lib/components/AppHeader.svelte";
@@ -30,6 +31,11 @@
     sentBatchCount: 0,
     receivedBatchCount: 0,
     errorState: null,
+    parameterList: [],
+    lastSyncParamName: null,
+    selfAvatarId: null,
+    ownerAvatarId: null,
+    avatarSyncActive: false,
   });
 
   let displayNameDraft = $state("");
@@ -155,6 +161,17 @@
         : uiMessage;
   }
 
+  async function toggleParamSync(
+    path: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await window.api.toggleParamSync(path, enabled);
+  }
+
+  async function editParam(param: ParamValue): Promise<void> {
+    await window.api.editParam(param);
+  }
+
   $effect(() => {
     localStorage.setItem("vrcpl:displayName", appState.displayName);
   });
@@ -177,6 +194,8 @@
         onSaveDisplayName={saveDisplayName}
         onLeaveRoom={leaveRoom}
         onTakeOwner={takeOwner}
+        onToggleParamSync={toggleParamSync}
+        onEditParam={editParam}
         onSaveRoomSettings={saveRoomSettings}
       />
     {:else}

@@ -3,6 +3,7 @@ import {
   isValidRoomCode,
   normalizeRoomCode,
   ROOM_MAX_PARTICIPANTS,
+  type AvatarIdUpdatedPayload,
   type DisplayNameUpdatedPayload,
   type OwnerChangedPayload,
   type ParamBatchPayload,
@@ -29,7 +30,7 @@ export class RoomManager {
     const roomCode = await this.generateRoomCode()
     const settings = mergeSettings(requestedSettings)
     const now = Date.now()
-    const participant: Participant = { sessionId, displayName, joinedAt: now, connected: true }
+    const participant: Participant = { sessionId, displayName, joinedAt: now, connected: true, avatarId: null }
 
     const multi = this.redis.multi()
 
@@ -41,7 +42,8 @@ export class RoomManager {
       instantOwnerTakeoverEnabled: settings.instantOwnerTakeoverEnabled ? '1' : '0',
       filterMode: settings.filterMode,
       filterPaths: JSON.stringify(settings.filterPaths),
-      participantCount: '1'
+      participantCount: '1',
+      ownerAvatarId: ''
     })
 
     multi.hSet(redisKeys.participants(roomCode), sessionId, JSON.stringify(participant))
@@ -65,7 +67,8 @@ export class RoomManager {
       ownerSessionId: sessionId,
       settings,
       participants: [participant],
-      snapshot: []
+      snapshot: [],
+      ownerAvatarId: null
     }
   }
 
@@ -93,7 +96,7 @@ export class RoomManager {
     }
 
     const now = Date.now()
-    const participant: Participant = { sessionId, displayName, joinedAt: now, connected: true }
+    const participant: Participant = { sessionId, displayName, joinedAt: now, connected: true, avatarId: null }
 
     const multi = this.redis.multi()
 
@@ -178,6 +181,12 @@ export class RoomManager {
 
     if (ownerChangedPayload) {
       multi.hSet(redisKeys.room(roomCode), 'ownerSessionId', ownerChangedPayload.ownerSessionId)
+      // Fetch new owner's avatarId for ownerAvatarId update
+      const newOwnerParticipantJson = await hashGet(this.redis, redisKeys.participants(roomCode), ownerChangedPayload.ownerSessionId)
+      if (newOwnerParticipantJson) {
+        const newOwnerParticipant = JSON.parse(newOwnerParticipantJson) as Participant
+        multi.hSet(redisKeys.room(roomCode), 'ownerAvatarId', newOwnerParticipant.avatarId || '')
+      }
     }
 
     await multi.exec()
@@ -227,7 +236,11 @@ export class RoomManager {
     }
 
     const previousOwnerSessionId = roomMeta.ownerSessionId
-    await this.redis.hSet(redisKeys.room(roomCode), 'ownerSessionId', sessionId)
+    const sessionAvatarId = (await hashGet(this.redis, redisKeys.session(sessionId), 'avatarId')) || ''
+    await this.redis.hSet(redisKeys.room(roomCode), {
+      ownerSessionId: sessionId,
+      ownerAvatarId: sessionAvatarId
+    })
 
     return { roomCode, ownerSessionId: sessionId, previousOwnerSessionId, reason: 'manual' }
   }
@@ -285,7 +298,11 @@ export class RoomManager {
         throw new RoomManagerError(ERROR_CODES.notOwner, 'Only the current owner can broadcast parameter updates.')
       }
 
-      await this.redis.hSet(redisKeys.room(roomCode), 'ownerSessionId', sessionId)
+      const sessionAvatarId = (await hashGet(this.redis, redisKeys.session(sessionId), 'avatarId')) || ''
+      await this.redis.hSet(redisKeys.room(roomCode), {
+        ownerSessionId: sessionId,
+        ownerAvatarId: sessionAvatarId
+      })
       ownerChangedPayload = {
         roomCode,
         ownerSessionId: sessionId,
@@ -313,6 +330,30 @@ export class RoomManager {
 
   async getRoomCodeBySession(sessionId: string): Promise<string | null> {
     return (await hashGet(this.redis, redisKeys.session(sessionId), 'roomCode')) ?? null
+  }
+
+  async updateAvatarId(sessionId: string, avatarId: string): Promise<AvatarIdUpdatedPayload> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
+
+    // Update session avatarId
+    await this.redis.hSet(redisKeys.session(sessionId), 'avatarId', avatarId)
+
+    // Update participant record
+    const participantJson = await hashGet(this.redis, redisKeys.participants(roomCode), sessionId)
+    if (participantJson) {
+      const participant = JSON.parse(participantJson) as Participant
+      participant.avatarId = avatarId
+      await this.redis.hSet(redisKeys.participants(roomCode), sessionId, JSON.stringify(participant))
+    }
+
+    // If this session is owner, update room's ownerAvatarId
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    if (roomMeta.ownerSessionId === sessionId) {
+      await this.redis.hSet(redisKeys.room(roomCode), 'ownerAvatarId', avatarId)
+    }
+
+    return { roomCode, sessionId, avatarId }
   }
 
   async getParticipantSessionIds(roomCode: string): Promise<string[]> {
@@ -384,7 +425,8 @@ export class RoomManager {
       ownerSessionId: roomMeta.ownerSessionId,
       settings,
       participants,
-      snapshot
+      snapshot,
+      ownerAvatarId: roomMeta.ownerAvatarId || null
     }
   }
 }

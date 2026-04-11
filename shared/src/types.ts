@@ -35,6 +35,7 @@ export interface Participant {
   displayName: string
   joinedAt: number
   connected: boolean
+  avatarId: string | null
 }
 
 export interface ErrorState {
@@ -77,7 +78,7 @@ export interface SetDisplayNamePayload {
   displayName: string
 }
 
-export interface SetRoomSettingsPayload extends Partial<RoomSettings> {}
+export interface SetRoomSettingsPayload extends Partial<RoomSettings> { }
 
 export interface ParamBatchPayload {
   batchSeq: number
@@ -88,6 +89,24 @@ export interface HeartbeatPayload {
   roomCode?: string
 }
 
+export interface AvatarChangePayload {
+  avatarId: string
+}
+
+export interface AvatarIdUpdatedPayload {
+  roomCode: string
+  sessionId: string
+  avatarId: string
+}
+
+export interface ParamEntry {
+  path: string
+  valueType: ParamValueType
+  value: boolean | number
+  updatedAt: number
+  syncEnabled: boolean
+}
+
 export interface RoomJoinedPayload {
   roomCode: string
   selfSessionId: string
@@ -95,6 +114,7 @@ export interface RoomJoinedPayload {
   settings: RoomSettings
   participants: Participant[]
   snapshot: ParamValue[]
+  ownerAvatarId: string | null
 }
 
 export interface RoomSettingsUpdatedPayload {
@@ -161,6 +181,11 @@ export interface RendererAppState {
   sentBatchCount: number
   receivedBatchCount: number
   errorState: ErrorState | null
+  parameterList: ParamEntry[]
+  lastSyncParamName: string | null
+  selfAvatarId: string | null
+  ownerAvatarId: string | null
+  avatarSyncActive: boolean
 }
 
 export type AppActionResult =
@@ -178,6 +203,8 @@ export interface DesktopApi {
   leaveRoom: () => Promise<AppActionResult>
   takeOwner: () => Promise<AppActionResult>
   updateRoomSettings: (settings: Partial<RoomSettings>) => Promise<AppActionResult>
+  toggleParamSync: (path: string, enabled: boolean) => Promise<void>
+  editParam: (param: ParamValue) => Promise<void>
   onStateChanged: (listener: (state: RendererAppState) => void) => () => void
 }
 
@@ -190,6 +217,7 @@ export type ClientToServerMessage =
   | SocketEnvelope<SetRoomSettingsPayload>
   | SocketEnvelope<ParamBatchPayload>
   | SocketEnvelope<HeartbeatPayload>
+  | SocketEnvelope<AvatarChangePayload>
 
 export type ServerToClientMessage =
   | SocketEnvelope<HelloAckPayload>
@@ -201,6 +229,7 @@ export type ServerToClientMessage =
   | SocketEnvelope<DisplayNameUpdatedPayload>
   | SocketEnvelope<OwnerChangedPayload>
   | SocketEnvelope<OutboundParamBatchPayload>
+  | SocketEnvelope<AvatarIdUpdatedPayload>
   | SocketEnvelope<ErrorPayload>
 
 export type TypedClientEvent = ClientEventType

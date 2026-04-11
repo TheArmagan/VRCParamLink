@@ -1,10 +1,12 @@
 <script lang="ts">
   import type {
     FilterMode,
+    ParamValue,
     RendererAppState,
   } from "../../../../../../shared/src/index.ts";
   import FilterSettingsCard from "./FilterSettingsCard.svelte";
   import OwnerControlsCard from "./OwnerControlsCard.svelte";
+  import ParameterListCard from "./ParameterListCard.svelte";
   import ParticipantsCard from "./ParticipantsCard.svelte";
   import RoomSummaryCard from "./RoomSummaryCard.svelte";
   import SyncStatusCard from "./SyncStatusCard.svelte";
@@ -18,6 +20,8 @@
     onSaveDisplayName = () => {},
     onLeaveRoom = () => {},
     onTakeOwner = () => {},
+    onToggleParamSync = (_path: string, _enabled: boolean) => {},
+    onEditParam = (_param: ParamValue) => {},
     onSaveRoomSettings = (
       _filterMode: FilterMode,
       _filterPathsText: string,
@@ -31,6 +35,8 @@
     onSaveDisplayName?: () => void;
     onLeaveRoom?: () => void;
     onTakeOwner?: () => void;
+    onToggleParamSync?: (path: string, enabled: boolean) => void;
+    onEditParam?: (param: ParamValue) => void;
     onSaveRoomSettings?: (
       filterMode: FilterMode,
       filterPathsText: string,
@@ -80,6 +86,13 @@
       />
 
       <SyncStatusCard state={appState} />
+
+      <ParameterListCard
+        parameters={appState.parameterList}
+        {isOwner}
+        onToggleSync={onToggleParamSync}
+        {onEditParam}
+      />
 
       <Separator />
 

@@ -7,7 +7,8 @@ export const CLIENT_EVENT_TYPES = {
   takeOwner: 'take_owner',
   setRoomSettings: 'set_room_settings',
   paramBatch: 'param_batch',
-  heartbeat: 'heartbeat'
+  heartbeat: 'heartbeat',
+  avatarChange: 'avatar_change'
 } as const
 
 export const SERVER_EVENT_TYPES = {
@@ -20,6 +21,7 @@ export const SERVER_EVENT_TYPES = {
   displayNameUpdated: 'display_name_updated',
   ownerChanged: 'owner_changed',
   paramBatch: 'param_batch',
+  avatarIdUpdated: 'avatar_id_updated',
   error: 'error'
 } as const
 

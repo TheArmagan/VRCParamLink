@@ -4,11 +4,15 @@ import {
   CONNECTION_STATES,
   createDefaultRoomSettings,
   ERROR_CODES,
+  PARAM_LIST_MAX_SIZE,
   SESSION_STATUSES,
+  type AvatarIdUpdatedPayload,
   type DisplayNameUpdatedPayload,
   type ErrorState,
   type OwnerChangedPayload,
   type OutboundParamBatchPayload,
+  type ParamEntry,
+  type ParamValue,
   type ParticipantJoinedPayload,
   type ParticipantLeftPayload,
   type RendererAppState,
@@ -39,8 +43,15 @@ const state: RendererAppState = {
   lastBatchSourceSessionId: null,
   sentBatchCount: 0,
   receivedBatchCount: 0,
-  errorState: null
+  errorState: null,
+  parameterList: [],
+  lastSyncParamName: null,
+  selfAvatarId: null,
+  ownerAvatarId: null,
+  avatarSyncActive: false
 }
+
+const syncToggles = new Map<string, boolean>()
 
 export function getAppState(): RendererAppState {
   return structuredClone(state)
@@ -107,6 +118,17 @@ export function applyRoomJoined(payload: RoomJoinedPayload): void {
   state.sentBatchCount = 0
   state.receivedBatchCount = payload.snapshot.length > 0 ? 1 : 0
   state.errorState = null
+  state.ownerAvatarId = payload.ownerAvatarId ?? null
+  state.avatarSyncActive = computeAvatarSyncActive()
+
+  // Build initial parameterList from snapshot
+  if (payload.snapshot.length > 0) {
+    updateParameterList(payload.snapshot)
+    state.lastSyncParamName = extractShortParamName(payload.snapshot[0].path)
+  } else {
+    state.parameterList = []
+    state.lastSyncParamName = null
+  }
 }
 
 export function applyParticipantJoined(payload: ParticipantJoinedPayload): void {
@@ -158,6 +180,11 @@ export function applyOwnerChanged(payload: OwnerChangedPayload): void {
   }
 
   state.ownerSessionId = payload.ownerSessionId
+
+  // Update ownerAvatarId from participant list
+  const newOwner = state.participantList.find((p) => p.sessionId === payload.ownerSessionId)
+  state.ownerAvatarId = newOwner?.avatarId ?? null
+  state.avatarSyncActive = computeAvatarSyncActive()
 }
 
 export function applyRoomSettingsUpdated(payload: RoomSettingsUpdatedPayload): void {
@@ -181,9 +208,14 @@ export function applyParamBatch(_payload: OutboundParamBatchPayload): void {
   state.lastBatchSize = _payload.params.length
   state.lastBatchSourceSessionId = _payload.sourceSessionId
   state.receivedBatchCount += 1
+
+  updateParameterList(_payload.params)
+  if (_payload.params.length > 0) {
+    state.lastSyncParamName = extractShortParamName(_payload.params[0].path)
+  }
 }
 
-export function applyLocalParamBatch(paramCount: number): void {
+export function applyLocalParamBatch(paramCount: number, params?: ParamValue[]): void {
   if (!state.roomCode || paramCount <= 0) {
     return
   }
@@ -193,6 +225,11 @@ export function applyLocalParamBatch(paramCount: number): void {
   state.lastBatchSize = paramCount
   state.lastBatchSourceSessionId = state.selfSessionId
   state.sentBatchCount += 1
+
+  if (params && params.length > 0) {
+    updateParameterList(params)
+    state.lastSyncParamName = extractShortParamName(params[0].path)
+  }
 }
 
 export function clearRoomState(): void {
@@ -212,4 +249,101 @@ export function clearRoomState(): void {
   state.sentBatchCount = 0
   state.receivedBatchCount = 0
   state.errorState = null
+  state.parameterList = []
+  state.lastSyncParamName = null
+  state.selfAvatarId = null
+  state.ownerAvatarId = null
+  state.avatarSyncActive = false
+  syncToggles.clear()
+}
+
+export function applyAvatarIdUpdated(payload: AvatarIdUpdatedPayload): void {
+  if (!state.roomCode) {
+    return
+  }
+
+  // Update participant's avatarId
+  state.participantList = state.participantList.map((p) =>
+    p.sessionId === payload.sessionId ? { ...p, avatarId: payload.avatarId } : p
+  )
+
+  // If the session is the owner, update ownerAvatarId
+  if (payload.sessionId === state.ownerSessionId) {
+    state.ownerAvatarId = payload.avatarId
+    state.avatarSyncActive = computeAvatarSyncActive()
+  }
+
+  // If the session is us, update selfAvatarId
+  if (payload.sessionId === state.selfSessionId) {
+    state.selfAvatarId = payload.avatarId
+    state.avatarSyncActive = computeAvatarSyncActive()
+  }
+}
+
+export function applySelfAvatarChange(avatarId: string): void {
+  state.selfAvatarId = avatarId
+  state.parameterList = []
+  state.lastSyncParamName = null
+  state.avatarSyncActive = computeAvatarSyncActive()
+  syncToggles.clear()
+}
+
+export function setParamSyncEnabled(path: string, enabled: boolean): void {
+  syncToggles.set(path, enabled)
+
+  state.parameterList = state.parameterList.map((entry) =>
+    entry.path === path ? { ...entry, syncEnabled: enabled } : entry
+  )
+}
+
+export function isParamSyncEnabled(path: string): boolean {
+  return syncToggles.get(path) ?? true
+}
+
+export function shouldApplyRemoteParam(path: string): boolean {
+  if (!state.avatarSyncActive) {
+    return false
+  }
+
+  return isParamSyncEnabled(path)
+}
+
+function updateParameterList(params: ParamValue[]): void {
+  const now = Date.now()
+  const entries = new Map<string, ParamEntry>()
+
+  // Existing entries
+  for (const entry of state.parameterList) {
+    entries.set(entry.path, entry)
+  }
+
+  // Merge new params
+  for (const param of params) {
+    const existing = entries.get(param.path)
+    entries.set(param.path, {
+      path: param.path,
+      valueType: param.valueType,
+      value: param.value,
+      updatedAt: now,
+      syncEnabled: existing?.syncEnabled ?? (syncToggles.get(param.path) ?? true)
+    })
+  }
+
+  // Sort by updatedAt descending, limit to PARAM_LIST_MAX_SIZE
+  state.parameterList = [...entries.values()]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, PARAM_LIST_MAX_SIZE)
+}
+
+function extractShortParamName(path: string): string {
+  const segments = path.split('/')
+  return segments[segments.length - 1] || path
+}
+
+function computeAvatarSyncActive(): boolean {
+  if (!state.selfAvatarId || !state.ownerAvatarId) {
+    return false
+  }
+
+  return state.selfAvatarId === state.ownerAvatarId
 }

@@ -11,6 +11,7 @@ import {
 } from '../../../shared/src/index.ts'
 import {
 	createEnvelope,
+	isAvatarChangePayload,
 	isCreateRoomPayload,
 	isEmptyPayload,
 	isHeartbeatPayload,
@@ -53,6 +54,9 @@ export function createSocketHandlers(registry: SocketRegistry) {
 				break
 			case CLIENT_EVENT_TYPES.paramBatch:
 				await handleParamBatch(ws, envelope)
+				break
+			case CLIENT_EVENT_TYPES.avatarChange:
+				await handleAvatarChange(ws, envelope)
 				break
 			case CLIENT_EVENT_TYPES.heartbeat:
 				handleHeartbeat(ws, envelope)
@@ -310,5 +314,28 @@ export function createSocketHandlers(registry: SocketRegistry) {
 		}
 
 		ws.data.lastHeartbeatAt = Date.now()
+	}
+
+	async function handleAvatarChange(ws: ServerWebSocket<ConnectionContext>, envelope: ParsedSocketEnvelope): Promise<void> {
+		if (!isAvatarChangePayload(envelope.payload)) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'Invalid avatar_change payload.', envelope.requestId)
+			return
+		}
+
+		if (!ws.data.sessionId) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'No active session found.', envelope.requestId)
+			return
+		}
+
+		try {
+			const payload = await registry.roomManager.updateAvatarId(ws.data.sessionId, envelope.payload.avatarId)
+			await broadcastToRoom(
+				registry,
+				payload.roomCode,
+				createEnvelope(SERVER_EVENT_TYPES.avatarIdUpdated, payload)
+			)
+		} catch (error) {
+			handleDomainError(ws, error, envelope.requestId)
+		}
 	}
 }

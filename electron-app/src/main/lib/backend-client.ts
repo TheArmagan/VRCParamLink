@@ -6,6 +6,7 @@ import {
   HEARTBEAT_INTERVAL_MS,
   SERVER_EVENT_TYPES,
   type AppActionResult,
+  type AvatarIdUpdatedPayload,
   type ClientToServerMessage,
   type DisplayNameUpdatedPayload,
   type ErrorPayload,
@@ -22,6 +23,7 @@ import {
   type SocketEnvelope
 } from '../../../../shared/src/index.ts'
 import {
+  applyAvatarIdUpdated,
   applyDisplayNameUpdated,
   applyLocalParamBatch,
   applyOwnerChanged,
@@ -55,7 +57,7 @@ export class BackendClient {
   private requestCounter = 0
   private readonly pendingRequests = new Map<string, PendingRequest>()
 
-  constructor(private readonly options: BackendClientOptions) {}
+  constructor(private readonly options: BackendClientOptions) { }
 
   async createRoom(): Promise<AppActionResult> {
     return this.sendRequest(CLIENT_EVENT_TYPES.createRoom, {}, [SERVER_EVENT_TYPES.roomJoined])
@@ -103,9 +105,17 @@ export class BackendClient {
     }
 
     this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.paramBatch, { batchSeq, params })))
-    applyLocalParamBatch(params.length)
+    applyLocalParamBatch(params.length, params)
     this.options.notifyStateChanged()
     return { ok: true, state: getAppState() }
+  }
+
+  sendAvatarChange(avatarId: string): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.avatarChange, { avatarId })))
   }
 
   async ensureConnected(displayName: string): Promise<AppActionResult> {
@@ -245,6 +255,9 @@ export class BackendClient {
       case SERVER_EVENT_TYPES.paramBatch:
         applyParamBatch(envelope.payload as OutboundParamBatchPayload)
         this.options.onRemoteParamBatch?.(envelope.payload as OutboundParamBatchPayload)
+        break
+      case SERVER_EVENT_TYPES.avatarIdUpdated:
+        applyAvatarIdUpdated(envelope.payload as AvatarIdUpdatedPayload)
         break
       case SERVER_EVENT_TYPES.error:
         setErrorState(envelope.payload as ErrorPayload)

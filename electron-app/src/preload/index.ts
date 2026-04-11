@@ -4,6 +4,7 @@ import {
   IPC_CHANNELS,
   type AppActionResult,
   type DesktopApi,
+  type ParamValue,
   type RendererAppState,
   type RoomSettings,
   type UpdateDisplayNameResult
@@ -34,6 +35,12 @@ const api: DesktopApi = {
   },
   updateRoomSettings: async (settings: Partial<RoomSettings>) => {
     return (await ipcRenderer.invoke(IPC_CHANNELS.updateRoomSettings, settings)) as AppActionResult
+  },
+  toggleParamSync: async (path: string, enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleParamSync, path, enabled)
+  },
+  editParam: async (param: ParamValue) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.editParam, param)
   },
   onStateChanged: (listener) => {
     const subscription = (_event: Electron.IpcRendererEvent, state: RendererAppState) => {

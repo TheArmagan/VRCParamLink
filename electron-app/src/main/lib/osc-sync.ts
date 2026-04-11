@@ -1,4 +1,5 @@
 import {
+  AVATAR_CHANGE_OSC_ADDRESS,
   DEFAULT_OSC_HOST,
   DEFAULT_OSC_INBOUND_PORT,
   DEFAULT_OSC_OUTBOUND_PORT,
@@ -9,10 +10,12 @@ import {
   type OutboundParamBatchPayload,
   type ParamValue
 } from '../../../../shared/src/index.ts'
+import { shouldApplyRemoteParam } from './app-state.ts'
 import { OSC, type OSCArg, type OSCMessage } from './OSC.ts'
 
 type OscSyncOptions = {
   onLocalParamBatch: (params: ParamValue[], batchSeq: number) => Promise<void> | void
+  onAvatarChange?: (avatarId: string) => void
   onError?: (error: Error) => void
 }
 
@@ -76,17 +79,34 @@ export class OscSyncService {
 
   applySnapshot(params: ParamValue[]): void {
     for (const param of params) {
-      this.sendParamToOsc(param)
+      if (shouldApplyRemoteParam(param.path)) {
+        this.sendParamToOsc(param)
+      }
     }
   }
 
   applyRemoteBatch(payload: OutboundParamBatchPayload): void {
     for (const param of payload.params) {
-      this.sendParamToOsc(param)
+      if (shouldApplyRemoteParam(param.path)) {
+        this.sendParamToOsc(param)
+      }
     }
   }
 
+  sendSingleParam(param: ParamValue): void {
+    this.sendParamToOsc(param)
+  }
+
   private handleOscMessage(message: OSCMessage): void {
+    // Handle avatar change separately
+    if (message.address === AVATAR_CHANGE_OSC_ADDRESS) {
+      const avatarArg = message.args[0]
+      if (avatarArg && avatarArg.type === 's' && typeof avatarArg.value === 'string') {
+        this.options.onAvatarChange?.(avatarArg.value)
+      }
+      return
+    }
+
     if (!isSupportedOscPath(message.address) || isBuiltinVrcParam(message.address)) {
       return
     }

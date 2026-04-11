@@ -1,6 +1,7 @@
 import {
   CLIENT_EVENT_TYPES,
   FILTER_MODES,
+  type AvatarChangePayload,
   type HeartbeatPayload,
   type HelloPayload,
   type JoinRoomPayload,
@@ -159,4 +160,8 @@ export function isParamBatchPayload(payload: unknown): payload is ParamBatchPayl
 
     return typeof entry.path === 'string' && hasValidValueType && hasValidValue
   })
+}
+
+export function isAvatarChangePayload(payload: unknown): payload is AvatarChangePayload {
+  return isPlainObject(payload) && typeof payload.avatarId === 'string' && payload.avatarId.length > 0
 }
