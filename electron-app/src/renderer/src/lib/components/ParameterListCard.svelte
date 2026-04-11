@@ -4,6 +4,8 @@
     ChevronDown,
     RefreshCw,
     Search,
+    Copy,
+    Check,
   } from "@lucide/svelte";
   import { Switch } from "$lib/components/ui/switch/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
@@ -37,6 +39,15 @@
 
   let open = $state(false);
   let searchQuery = $state("");
+  let copiedPath: string | null = $state(null);
+
+  function copyPath(path: string): void {
+    navigator.clipboard.writeText(path);
+    copiedPath = path;
+    setTimeout(() => {
+      if (copiedPath === path) copiedPath = null;
+    }, 1500);
+  }
 
   let filteredParams = $derived(
     parameters
@@ -141,12 +152,26 @@
           >
             <!-- Row 1: Param name + sync toggle -->
             <div class="flex items-center justify-between gap-2">
-              <span
-                class="min-w-0 truncate font-mono text-foreground"
-                title={entry.path}
-              >
-                {shortName(entry.path)}
-              </span>
+              <div class="flex min-w-0 items-center gap-1">
+                <span
+                  class="min-w-0 truncate font-mono text-foreground"
+                  title={entry.path}
+                >
+                  {shortName(entry.path)}
+                </span>
+                <button
+                  type="button"
+                  class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                  title="Copy full path"
+                  onclick={() => copyPath(entry.path)}
+                >
+                  {#if copiedPath === entry.path}
+                    <Check class="size-3 text-green-500" />
+                  {:else}
+                    <Copy class="size-3" />
+                  {/if}
+                </button>
+              </div>
               {#if !isOwner}
                 <Switch
                   size="sm"

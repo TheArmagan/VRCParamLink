@@ -1,9 +1,11 @@
+import picomatch from 'picomatch'
 import {
   APP_NAME,
   APP_SCREENS,
   CONNECTION_STATES,
   createDefaultRoomSettings,
   ERROR_CODES,
+  FILTER_MODES,
   PARAM_LIST_MAX_SIZE,
   SESSION_STATUSES,
   type AvatarIdUpdatedPayload,
@@ -339,7 +341,26 @@ export function shouldApplyRemoteParam(path: string): boolean {
     return false
   }
 
-  return isParamSyncEnabled(path)
+  if (!isParamSyncEnabled(path)) {
+    return false
+  }
+
+  return passesFilter(path)
+}
+
+function passesFilter(path: string): boolean {
+  if (state.filterMode === FILTER_MODES.allowAll || state.filterPaths.length === 0) {
+    return true
+  }
+
+  const isMatch = picomatch(state.filterPaths)
+
+  if (state.filterMode === FILTER_MODES.whitelist) {
+    return isMatch(path)
+  }
+
+  // blacklist
+  return !isMatch(path)
 }
 
 function updateParameterList(params: ParamValue[]): void {

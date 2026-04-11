@@ -16,7 +16,11 @@ export function mergeSettings(partialSettings?: Partial<RoomSettings>): RoomSett
   const filterPaths = [...new Set((partialSettings?.filterPaths ?? defaults.filterPaths).map((entry) => entry.trim()))]
 
   for (const path of filterPaths) {
-    if (!isSupportedOscPath(path)) {
+    // Allow glob patterns (e.g. /avatar/parameters/Eye*) — only reject
+    // paths that clearly don't target the /avatar namespace after stripping
+    // leading glob characters.
+    const literal = path.replace(/^[*?{[]+/, '')
+    if (literal.length > 0 && !isSupportedOscPath(literal)) {
       throw new RoomManagerError(ERROR_CODES.invalidFilterPath, `Unsupported filter path: ${path}`)
     }
   }

@@ -68,7 +68,7 @@
           bind:value={filterPathsText}
           class="min-h-16 resize-none text-xs"
           disabled={!isOwner}
-          placeholder="/avatar/PathOne&#10;/avatar/PathTwo"
+          placeholder="/avatar/parameters/Eye*&#10;/avatar/parameters/Hand*"
         />
       </div>
 

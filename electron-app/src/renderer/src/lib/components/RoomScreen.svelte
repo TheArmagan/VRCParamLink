@@ -61,12 +61,34 @@
   let autoOwnerDraft = $state(appState.autoOwnerEnabled);
   let instantOwnerDraft = $state(appState.instantOwnerTakeoverEnabled);
 
+  // Only sync drafts when the server-side values actually change
+  let lastSyncedFilterMode: FilterMode | null = $state(null);
+  let lastSyncedFilterPaths: string | null = $state(null);
+  let lastSyncedAutoOwner: boolean | null = $state(null);
+  let lastSyncedInstantOwner: boolean | null = $state(null);
+
   $effect(() => {
-    if (appState.roomCode) {
+    if (!appState.roomCode) return;
+
+    if (appState.filterMode !== lastSyncedFilterMode) {
       filterModeDraft = appState.filterMode;
-      filterPathsDraft = appState.filterPaths.join("\n");
+      lastSyncedFilterMode = appState.filterMode;
+    }
+
+    const serverPaths = appState.filterPaths.join("\n");
+    if (serverPaths !== lastSyncedFilterPaths) {
+      filterPathsDraft = serverPaths;
+      lastSyncedFilterPaths = serverPaths;
+    }
+
+    if (appState.autoOwnerEnabled !== lastSyncedAutoOwner) {
       autoOwnerDraft = appState.autoOwnerEnabled;
+      lastSyncedAutoOwner = appState.autoOwnerEnabled;
+    }
+
+    if (appState.instantOwnerTakeoverEnabled !== lastSyncedInstantOwner) {
       instantOwnerDraft = appState.instantOwnerTakeoverEnabled;
+      lastSyncedInstantOwner = appState.instantOwnerTakeoverEnabled;
     }
   });
 </script>

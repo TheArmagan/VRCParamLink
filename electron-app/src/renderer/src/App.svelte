@@ -21,8 +21,9 @@
     ownerSessionId: null,
     autoOwnerEnabled: false,
     instantOwnerTakeoverEnabled: true,
-    filterMode: "allow_all",
-    filterPaths: [],
+    filterMode:
+      (localStorage.getItem("vrcpl:filterMode") as FilterMode) ?? "allow_all",
+    filterPaths: JSON.parse(localStorage.getItem("vrcpl:filterPaths") ?? "[]"),
     connectionState: "idle",
     sessionStatus: "idle",
     lastSyncAt: null,
@@ -156,6 +157,11 @@
       autoOwnerEnabled,
       instantOwnerTakeoverEnabled,
     });
+
+    if (result.ok) {
+      localStorage.setItem("vrcpl:filterMode", filterMode);
+      localStorage.setItem("vrcpl:filterPaths", JSON.stringify(filterPaths));
+    }
 
     uiMessage = result.ok
       ? "Room settings updated."

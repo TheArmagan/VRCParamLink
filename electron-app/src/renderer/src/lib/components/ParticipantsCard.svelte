@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Crown, Users, ChevronDown, Search } from "@lucide/svelte";
+  import {
+    Crown,
+    Users,
+    ChevronDown,
+    Search,
+    Copy,
+    Check,
+  } from "@lucide/svelte";
   import type {
     ParamEntry,
     ParamValue,
@@ -26,6 +33,15 @@
 
   let expandedParticipants: Record<string, boolean> = $state({});
   let participantSearchQuery: Record<string, string> = $state({});
+  let copiedPath: string | null = $state(null);
+
+  function copyPath(path: string): void {
+    navigator.clipboard.writeText(path);
+    copiedPath = path;
+    setTimeout(() => {
+      if (copiedPath === path) copiedPath = null;
+    }, 1500);
+  }
 
   function shortName(path: string): string {
     const segments = path.split("/");
@@ -149,12 +165,26 @@
                     class="border-b border-border px-2.5 py-1.5 text-xs last:border-b-0"
                   >
                     <div class="flex items-center justify-between gap-2">
-                      <span
-                        class="min-w-0 truncate font-mono text-foreground"
-                        title={entry.path}
-                      >
-                        {shortName(entry.path)}
-                      </span>
+                      <div class="flex min-w-0 items-center gap-1">
+                        <span
+                          class="min-w-0 truncate font-mono text-foreground"
+                          title={entry.path}
+                        >
+                          {shortName(entry.path)}
+                        </span>
+                        <button
+                          type="button"
+                          class="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                          title="Copy full path"
+                          onclick={() => copyPath(entry.path)}
+                        >
+                          {#if copiedPath === entry.path}
+                            <Check class="size-3 text-green-500" />
+                          {:else}
+                            <Copy class="size-3" />
+                          {/if}
+                        </button>
+                      </div>
                     </div>
                     <div class="mt-1 flex items-center gap-1.5">
                       {#if entry.valueType === "bool"}
