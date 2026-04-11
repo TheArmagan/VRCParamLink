@@ -38,7 +38,7 @@
 }
  
 .dark {
- --background: transparent;
+ --background: oklch(0.205 0 0 / 20%);
  --foreground: oklch(0.985 0 0);
  --card: oklch(0.205 0 0 / 60%);
  --card-foreground: oklch(0.985 0 0);
@@ -113,7 +113,7 @@
  html,
  body,
  #app {
-  @apply h-full bg-transparent;
+  @apply h-full bg-background;
  }
 
  body {

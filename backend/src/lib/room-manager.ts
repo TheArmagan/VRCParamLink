@@ -6,215 +6,303 @@ import {
   type DisplayNameUpdatedPayload,
   type OwnerChangedPayload,
   type ParamBatchPayload,
+  type ParamValue,
+  type Participant,
   type ParticipantLeaveReason,
   type ParticipantLeftPayload,
   type RoomJoinedPayload,
   type RoomSettings,
   type RoomSettingsUpdatedPayload
 } from '../../../shared/src/index.ts'
-import {
-  createParticipant,
-  ensureUniqueDisplayName,
-  generateRoomCode,
-  getOldestActiveSessionId,
-  mergeSettings,
-  mergeSnapshot,
-  normalizeParams,
-  toRoomJoinedPayload
-} from './room-helpers.ts'
+import { mergeSettings, normalizeParams, generateRoomCodeCandidate } from './room-helpers.ts'
 import { RoomManagerError } from './room-errors.ts'
-import type { HandleParamBatchResult, LeaveRoomResult, RoomRecord } from './room-types.ts'
+import type { RedisClient } from './redis-client.ts'
+import { redisKeys, hashGetAll, hashGet, hashKeys, sortedRange, stringGet } from './redis-client.ts'
+import type { HandleParamBatchResult, LeaveRoomResult } from './room-types.ts'
 
 export class RoomManager {
-  private readonly rooms = new Map<string, RoomRecord>()
-  private readonly sessionToRoom = new Map<string, string>()
+  constructor(private readonly redis: RedisClient) { }
 
-  createRoom(sessionId: string, displayName: string, requestedSettings?: Partial<RoomSettings>): RoomJoinedPayload {
-    this.ensureSessionNotInRoom(sessionId)
+  async createRoom(sessionId: string, displayName: string, requestedSettings?: Partial<RoomSettings>): Promise<RoomJoinedPayload> {
+    await this.ensureSessionNotInRoom(sessionId)
 
-    const roomCode = generateRoomCode(this.rooms)
+    const roomCode = await this.generateRoomCode()
     const settings = mergeSettings(requestedSettings)
-    const participant = createParticipant(sessionId, displayName)
-    const room: RoomRecord = {
+    const now = Date.now()
+    const participant: Participant = { sessionId, displayName, joinedAt: now, connected: true }
+
+    const multi = this.redis.multi()
+
+    multi.hSet(redisKeys.room(roomCode), {
       roomCode,
       ownerSessionId: sessionId,
+      createdAt: String(now),
+      autoOwnerEnabled: settings.autoOwnerEnabled ? '1' : '0',
+      instantOwnerTakeoverEnabled: settings.instantOwnerTakeoverEnabled ? '1' : '0',
+      filterMode: settings.filterMode,
+      filterPaths: JSON.stringify(settings.filterPaths),
+      participantCount: '1'
+    })
+
+    multi.hSet(redisKeys.participants(roomCode), sessionId, JSON.stringify(participant))
+    multi.zAdd(redisKeys.joinOrder(roomCode), { score: now, value: sessionId })
+    multi.set(redisKeys.displayName(roomCode, displayName), sessionId)
+
+    multi.hSet(redisKeys.session(sessionId), {
+      sessionId,
+      displayName,
+      roomCode,
+      joinedAt: String(now),
+      connected: '1',
+      lastSeenAt: String(now)
+    })
+
+    await multi.exec()
+
+    return {
+      roomCode,
+      selfSessionId: sessionId,
+      ownerSessionId: sessionId,
       settings,
-      participants: new Map([[sessionId, participant]]),
-      joinOrder: [sessionId],
+      participants: [participant],
       snapshot: []
     }
-
-    this.rooms.set(roomCode, room)
-    this.sessionToRoom.set(sessionId, roomCode)
-
-    return toRoomJoinedPayload(room, sessionId)
   }
 
-  joinRoom(sessionId: string, displayName: string, rawRoomCode: string): RoomJoinedPayload {
-    this.ensureSessionNotInRoom(sessionId)
+  async joinRoom(sessionId: string, displayName: string, rawRoomCode: string): Promise<RoomJoinedPayload> {
+    await this.ensureSessionNotInRoom(sessionId)
 
     const roomCode = normalizeRoomCode(rawRoomCode)
     if (!isValidRoomCode(roomCode)) {
       throw new RoomManagerError(ERROR_CODES.invalidRoomCode, 'Room code format is invalid.')
     }
 
-    const room = this.rooms.get(roomCode)
-    if (!room) {
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    if (!roomMeta.roomCode) {
       throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
     }
 
-    if (room.participants.size >= ROOM_MAX_PARTICIPANTS) {
+    const participantCount = parseInt(roomMeta.participantCount, 10)
+    if (participantCount >= ROOM_MAX_PARTICIPANTS) {
       throw new RoomManagerError(ERROR_CODES.roomFull, 'Room is full.')
     }
 
-    ensureUniqueDisplayName(room, displayName)
+    const existingHolder = await stringGet(this.redis, redisKeys.displayName(roomCode, displayName))
+    if (existingHolder) {
+      throw new RoomManagerError(ERROR_CODES.displayNameInUse, 'Display name is already in use in this room.')
+    }
 
-    const participant = createParticipant(sessionId, displayName)
-    room.participants.set(sessionId, participant)
-    room.joinOrder.push(sessionId)
-    this.sessionToRoom.set(sessionId, roomCode)
+    const now = Date.now()
+    const participant: Participant = { sessionId, displayName, joinedAt: now, connected: true }
 
-    return toRoomJoinedPayload(room, sessionId)
+    const multi = this.redis.multi()
+
+    multi.hSet(redisKeys.participants(roomCode), sessionId, JSON.stringify(participant))
+    multi.zAdd(redisKeys.joinOrder(roomCode), { score: now, value: sessionId })
+    multi.set(redisKeys.displayName(roomCode, displayName), sessionId)
+    multi.hSet(redisKeys.room(roomCode), 'participantCount', String(participantCount + 1))
+
+    multi.hSet(redisKeys.session(sessionId), {
+      sessionId,
+      displayName,
+      roomCode,
+      joinedAt: String(now),
+      connected: '1',
+      lastSeenAt: String(now)
+    })
+
+    await multi.exec()
+
+    return await this.buildRoomJoinedPayload(roomCode, sessionId)
   }
 
-  leaveRoom(sessionId: string, reason: ParticipantLeaveReason): LeaveRoomResult {
-    const room = this.requireRoomBySession(sessionId)
-    const participant = room.participants.get(sessionId)
-    if (!participant) {
+  async leaveRoom(sessionId: string, reason: ParticipantLeaveReason): Promise<LeaveRoomResult> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
+
+    const participantJson = await hashGet(this.redis, redisKeys.participants(roomCode), sessionId)
+    if (!participantJson) {
       throw new RoomManagerError(ERROR_CODES.notInRoom, 'Participant not found in room.')
     }
 
-    room.participants.delete(sessionId)
-    room.joinOrder = room.joinOrder.filter((entry) => entry !== sessionId)
-    this.sessionToRoom.delete(sessionId)
+    const participant = JSON.parse(participantJson) as Participant
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    const participantCount = parseInt(roomMeta.participantCount, 10) - 1
 
     const leftPayload: ParticipantLeftPayload = {
-      roomCode: room.roomCode,
+      roomCode,
       sessionId,
       displayName: participant.displayName,
       reason
     }
 
-    if (room.participants.size === 0) {
-      this.rooms.delete(room.roomCode)
-      return {
-        leftPayload,
-        roomCode: room.roomCode,
-        deletedRoom: true
-      }
+    if (participantCount <= 0) {
+      const multi = this.redis.multi()
+      multi.del(redisKeys.room(roomCode))
+      multi.del(redisKeys.participants(roomCode))
+      multi.del(redisKeys.joinOrder(roomCode))
+      multi.del(redisKeys.state(roomCode))
+      multi.del(redisKeys.displayName(roomCode, participant.displayName))
+      multi.del(redisKeys.session(sessionId))
+      await multi.exec()
+
+      return { leftPayload, roomCode, deletedRoom: true }
     }
 
     let ownerChangedPayload: OwnerChangedPayload | undefined
 
-    if (room.ownerSessionId === sessionId) {
-      const nextOwner = getOldestActiveSessionId(room)
-      const previousOwnerSessionId = room.ownerSessionId
-      room.ownerSessionId = nextOwner
+    if (roomMeta.ownerSessionId === sessionId) {
+      const ordered = await sortedRange(this.redis, redisKeys.joinOrder(roomCode), 0, -1)
+      const participantKeys = await hashKeys(this.redis, redisKeys.participants(roomCode))
+      const remainingSet = new Set(participantKeys.filter((id) => id !== sessionId))
+
+      const nextOwner = ordered.find((id) => remainingSet.has(id))
+      if (!nextOwner) {
+        throw new RoomManagerError(ERROR_CODES.notInRoom, 'No active participant left to promote as owner.')
+      }
+
       ownerChangedPayload = {
-        roomCode: room.roomCode,
+        roomCode,
         ownerSessionId: nextOwner,
-        previousOwnerSessionId,
+        previousOwnerSessionId: sessionId,
         reason: 'owner_left'
       }
     }
 
-    return {
-      leftPayload,
-      ownerChangedPayload,
-      roomCode: room.roomCode,
-      deletedRoom: false
+    const multi = this.redis.multi()
+    multi.hDel(redisKeys.participants(roomCode), sessionId)
+    multi.zRem(redisKeys.joinOrder(roomCode), sessionId)
+    multi.del(redisKeys.displayName(roomCode, participant.displayName))
+    multi.del(redisKeys.session(sessionId))
+    multi.hSet(redisKeys.room(roomCode), 'participantCount', String(participantCount))
+
+    if (ownerChangedPayload) {
+      multi.hSet(redisKeys.room(roomCode), 'ownerSessionId', ownerChangedPayload.ownerSessionId)
     }
+
+    await multi.exec()
+
+    return { leftPayload, ownerChangedPayload, roomCode, deletedRoom: false }
   }
 
-  updateDisplayName(sessionId: string, displayName: string): DisplayNameUpdatedPayload {
-    const room = this.requireRoomBySession(sessionId)
-    const participant = room.participants.get(sessionId)
-    if (!participant) {
+  async updateDisplayName(sessionId: string, displayName: string): Promise<DisplayNameUpdatedPayload> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
+
+    const existingHolder = await stringGet(this.redis, redisKeys.displayName(roomCode, displayName))
+    if (existingHolder && existingHolder !== sessionId) {
+      throw new RoomManagerError(ERROR_CODES.displayNameInUse, 'Display name is already in use in this room.')
+    }
+
+    const participantJson = await hashGet(this.redis, redisKeys.participants(roomCode), sessionId)
+    if (!participantJson) {
       throw new RoomManagerError(ERROR_CODES.notInRoom, 'Participant not found in room.')
     }
 
-    ensureUniqueDisplayName(room, displayName, sessionId)
-
+    const participant = JSON.parse(participantJson) as Participant
     const previousDisplayName = participant.displayName
     participant.displayName = displayName
 
-    return {
-      roomCode: room.roomCode,
-      sessionId,
-      previousDisplayName,
-      displayName
-    }
+    const multi = this.redis.multi()
+    multi.del(redisKeys.displayName(roomCode, previousDisplayName))
+    multi.set(redisKeys.displayName(roomCode, displayName), sessionId)
+    multi.hSet(redisKeys.participants(roomCode), sessionId, JSON.stringify(participant))
+    multi.hSet(redisKeys.session(sessionId), 'displayName', displayName)
+    await multi.exec()
+
+    return { roomCode, sessionId, previousDisplayName, displayName }
   }
 
-  takeOwner(sessionId: string): OwnerChangedPayload {
-    const room = this.requireRoomBySession(sessionId)
+  async takeOwner(sessionId: string): Promise<OwnerChangedPayload> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
 
-    if (!room.settings.instantOwnerTakeoverEnabled) {
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    if (!roomMeta.roomCode) {
+      throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
+    }
+
+    if (roomMeta.instantOwnerTakeoverEnabled !== '1') {
       throw new RoomManagerError(ERROR_CODES.ownerTakeoverDisabled, 'Owner takeover is disabled for this room.')
     }
 
-    const previousOwnerSessionId = room.ownerSessionId
-    room.ownerSessionId = sessionId
+    const previousOwnerSessionId = roomMeta.ownerSessionId
+    await this.redis.hSet(redisKeys.room(roomCode), 'ownerSessionId', sessionId)
 
-    return {
-      roomCode: room.roomCode,
-      ownerSessionId: sessionId,
-      previousOwnerSessionId,
-      reason: 'manual'
-    }
+    return { roomCode, ownerSessionId: sessionId, previousOwnerSessionId, reason: 'manual' }
   }
 
-  updateRoomSettings(sessionId: string, partialSettings: Partial<RoomSettings>): RoomSettingsUpdatedPayload {
-    const room = this.requireRoomBySession(sessionId)
+  async updateRoomSettings(sessionId: string, partialSettings: Partial<RoomSettings>): Promise<RoomSettingsUpdatedPayload> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
 
-    if (room.ownerSessionId !== sessionId) {
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    if (!roomMeta.roomCode) {
+      throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
+    }
+
+    if (roomMeta.ownerSessionId !== sessionId) {
       throw new RoomManagerError(ERROR_CODES.notOwner, 'Only the current owner can update room settings.')
     }
 
-    const nextSettings = mergeSettings({
-      ...room.settings,
-      ...partialSettings
+    const currentSettings: RoomSettings = {
+      autoOwnerEnabled: roomMeta.autoOwnerEnabled === '1',
+      instantOwnerTakeoverEnabled: roomMeta.instantOwnerTakeoverEnabled === '1',
+      filterMode: roomMeta.filterMode as RoomSettings['filterMode'],
+      filterPaths: JSON.parse(roomMeta.filterPaths || '[]')
+    }
+
+    const nextSettings = mergeSettings({ ...currentSettings, ...partialSettings })
+
+    await this.redis.hSet(redisKeys.room(roomCode), {
+      autoOwnerEnabled: nextSettings.autoOwnerEnabled ? '1' : '0',
+      instantOwnerTakeoverEnabled: nextSettings.instantOwnerTakeoverEnabled ? '1' : '0',
+      filterMode: nextSettings.filterMode,
+      filterPaths: JSON.stringify(nextSettings.filterPaths)
     })
 
-    room.settings = nextSettings
-
-    return {
-      roomCode: room.roomCode,
-      updatedBySessionId: sessionId,
-      settings: nextSettings
-    }
+    return { roomCode, updatedBySessionId: sessionId, settings: nextSettings }
   }
 
-  handleParamBatch(sessionId: string, payload: ParamBatchPayload): HandleParamBatchResult | null {
-    const room = this.requireRoomBySession(sessionId)
+  async handleParamBatch(sessionId: string, payload: ParamBatchPayload): Promise<HandleParamBatchResult | null> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
     const normalizedParams = normalizeParams(payload.params)
 
     if (normalizedParams.length === 0) {
       return null
     }
 
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    if (!roomMeta.roomCode) {
+      throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
+    }
+
     let ownerChangedPayload: OwnerChangedPayload | undefined
 
-    if (room.ownerSessionId !== sessionId) {
-      if (!room.settings.autoOwnerEnabled) {
+    if (roomMeta.ownerSessionId !== sessionId) {
+      if (roomMeta.autoOwnerEnabled !== '1') {
         throw new RoomManagerError(ERROR_CODES.notOwner, 'Only the current owner can broadcast parameter updates.')
       }
 
-      const previousOwnerSessionId = room.ownerSessionId
-      room.ownerSessionId = sessionId
+      await this.redis.hSet(redisKeys.room(roomCode), 'ownerSessionId', sessionId)
       ownerChangedPayload = {
-        roomCode: room.roomCode,
+        roomCode,
         ownerSessionId: sessionId,
-        previousOwnerSessionId,
+        previousOwnerSessionId: roomMeta.ownerSessionId,
         reason: 'auto_owner'
       }
     }
 
-    room.snapshot = mergeSnapshot(room.snapshot, normalizedParams)
+    const stateUpdates: Record<string, string> = {}
+    for (const param of normalizedParams) {
+      stateUpdates[param.path] = JSON.stringify(param)
+    }
+    await this.redis.hSet(redisKeys.state(roomCode), stateUpdates)
 
     return {
       outboundPayload: {
-        roomCode: room.roomCode,
+        roomCode,
         sourceSessionId: sessionId,
         batchSeq: payload.batchSeq,
         params: normalizedParams
@@ -223,41 +311,80 @@ export class RoomManager {
     }
   }
 
-  getRoomCodeBySession(sessionId: string): string | null {
-    return this.sessionToRoom.get(sessionId) ?? null
+  async getRoomCodeBySession(sessionId: string): Promise<string | null> {
+    return (await hashGet(this.redis, redisKeys.session(sessionId), 'roomCode')) ?? null
   }
 
-  getParticipantSessionIds(roomCode: string): string[] {
-    const room = this.rooms.get(roomCode)
-    return room ? [...room.participants.keys()] : []
+  async getParticipantSessionIds(roomCode: string): Promise<string[]> {
+    return await hashKeys(this.redis, redisKeys.participants(roomCode))
   }
 
-  toRoomState(roomCode: string, selfSessionId: string): RoomJoinedPayload {
-    const room = this.rooms.get(roomCode)
-    if (!room) {
-      throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
-    }
-
-    return toRoomJoinedPayload(room, selfSessionId)
+  async toRoomState(roomCode: string, selfSessionId: string): Promise<RoomJoinedPayload> {
+    return await this.buildRoomJoinedPayload(roomCode, selfSessionId)
   }
 
-  private requireRoomBySession(sessionId: string): RoomRecord {
-    const roomCode = this.sessionToRoom.get(sessionId)
-    if (!roomCode) {
+  private async requireSession(sessionId: string): Promise<{ sessionId: string; roomCode: string; displayName: string }> {
+    const sessionData = await hashGetAll(this.redis, redisKeys.session(sessionId))
+    if (!sessionData.sessionId || !sessionData.roomCode) {
       throw new RoomManagerError(ERROR_CODES.notInRoom, 'Session is not currently in a room.')
     }
 
-    const room = this.rooms.get(roomCode)
-    if (!room) {
-      throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found for session.')
+    return {
+      sessionId: sessionData.sessionId,
+      roomCode: sessionData.roomCode,
+      displayName: sessionData.displayName
     }
-
-    return room
   }
 
-  private ensureSessionNotInRoom(sessionId: string): void {
-    if (this.sessionToRoom.has(sessionId)) {
+  private async ensureSessionNotInRoom(sessionId: string): Promise<void> {
+    const roomCode = await hashGet(this.redis, redisKeys.session(sessionId), 'roomCode')
+    if (roomCode) {
       throw new RoomManagerError(ERROR_CODES.invalidMessage, 'Leave the current room before starting a new room action.')
+    }
+  }
+
+  private async generateRoomCode(): Promise<string> {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const candidate = generateRoomCodeCandidate()
+      const exists = await this.redis.exists(redisKeys.room(candidate))
+      if (!exists) {
+        return candidate
+      }
+    }
+
+    throw new RoomManagerError(ERROR_CODES.invalidMessage, 'Unable to generate a unique room code.')
+  }
+
+  private async buildRoomJoinedPayload(roomCode: string, selfSessionId: string): Promise<RoomJoinedPayload> {
+    const roomMeta = await hashGetAll(this.redis, redisKeys.room(roomCode))
+    if (!roomMeta.roomCode) {
+      throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
+    }
+
+    const ordered = await sortedRange(this.redis, redisKeys.joinOrder(roomCode), 0, -1)
+    const participantsHash = await hashGetAll(this.redis, redisKeys.participants(roomCode))
+
+    const participants: Participant[] = ordered
+      .filter((sessionId) => sessionId in participantsHash)
+      .map((sessionId) => JSON.parse(participantsHash[sessionId]) as Participant)
+
+    const stateHash = await hashGetAll(this.redis, redisKeys.state(roomCode))
+    const snapshot: ParamValue[] = Object.values(stateHash).map((v) => JSON.parse(v) as ParamValue)
+
+    const settings: RoomSettings = {
+      autoOwnerEnabled: roomMeta.autoOwnerEnabled === '1',
+      instantOwnerTakeoverEnabled: roomMeta.instantOwnerTakeoverEnabled === '1',
+      filterMode: roomMeta.filterMode as RoomSettings['filterMode'],
+      filterPaths: JSON.parse(roomMeta.filterPaths || '[]')
+    }
+
+    return {
+      roomCode,
+      selfSessionId,
+      ownerSessionId: roomMeta.ownerSessionId,
+      settings,
+      participants,
+      snapshot
     }
   }
 }

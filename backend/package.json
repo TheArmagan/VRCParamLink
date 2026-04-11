@@ -11,5 +11,9 @@
   },
   "dependencies": {
     "redis": "^5.11.0"
+  },
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts"
   }
 }

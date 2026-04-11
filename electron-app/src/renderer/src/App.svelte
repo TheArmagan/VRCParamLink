@@ -13,7 +13,7 @@
     appName: "VRCParamLink",
     screen: "welcome",
     selfSessionId: null,
-    displayName: "",
+    displayName: localStorage.getItem("vrcpl:displayName") ?? "",
     roomCode: "",
     participantList: [],
     ownerSessionId: null,
@@ -154,6 +154,10 @@
         ? result.error.message
         : uiMessage;
   }
+
+  $effect(() => {
+    localStorage.setItem("vrcpl:displayName", appState.displayName);
+  });
 </script>
 
 <main

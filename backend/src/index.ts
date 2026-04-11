@@ -3,16 +3,17 @@ import {
 	DEFAULT_BACKEND_PORT,
 	ERROR_CODES,
 	HEARTBEAT_INTERVAL_MS,
-	HEARTBEAT_TIMEOUT_MS,
-	SERVER_EVENT_TYPES
+	HEARTBEAT_TIMEOUT_MS
 } from '../../shared/src/index.ts'
 import { parseSocketEnvelope, requiresHandshake } from './lib/protocol.ts'
+import { connectRedis } from './lib/redis-client.ts'
 import { createSocketHandlers } from './lib/ws-handlers.ts'
 import { sendError } from './lib/ws-messaging.ts'
 import { createSocketRegistry } from './lib/ws-state.ts'
 import { createConnectionContext, type ConnectionContext } from './lib/ws-types.ts'
 
-const registry = createSocketRegistry()
+const redis = await connectRedis()
+const registry = createSocketRegistry(redis)
 const socketHandlers = createSocketHandlers(registry)
 const port = Number(Bun.env.PORT ?? DEFAULT_BACKEND_PORT)
 
@@ -48,7 +49,9 @@ const server = Bun.serve<ConnectionContext>({
 				return
 			}
 
-			socketHandlers.handleMessage(ws, envelope)
+			socketHandlers.handleMessage(ws, envelope).catch((err) => {
+				console.error('[ws] unhandled message error', err)
+			})
 		},
 		close(ws, code, reason) {
 			registry.sockets.delete(ws)
@@ -56,7 +59,9 @@ const server = Bun.serve<ConnectionContext>({
 				registry.sessionSockets.delete(ws.data.sessionId)
 			}
 
-			socketHandlers.handleDisconnect(ws)
+			socketHandlers.handleDisconnect(ws).catch((err) => {
+				console.error('[ws] disconnect cleanup failed', err)
+			})
 			console.log(`[ws] connection closed (${code}) ${reason}`)
 		}
 	}

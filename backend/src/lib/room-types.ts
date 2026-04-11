@@ -1,19 +1,8 @@
 import type {
   OutboundParamBatchPayload,
   OwnerChangedPayload,
-  ParamValue,
-  ParticipantLeftPayload,
-  RoomSettings
+  ParticipantLeftPayload
 } from '../../../shared/src/index.ts'
-
-export type RoomRecord = {
-  roomCode: string
-  ownerSessionId: string
-  settings: RoomSettings
-  participants: Map<string, import('../../../shared/src/index.ts').Participant>
-  joinOrder: string[]
-  snapshot: ParamValue[]
-}
 
 export type HandleParamBatchResult = {
   outboundPayload: OutboundParamBatchPayload

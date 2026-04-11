@@ -37,13 +37,13 @@ export function sendEnvelope<TPayload>(
 	ws.send(JSON.stringify(createEnvelope(type, payload, requestId)))
 }
 
-export function broadcastToRoom(
+export async function broadcastToRoom(
 	registry: SocketRegistry,
 	roomCode: string,
 	envelope: SocketEnvelope<unknown>,
 	excludedSessionId?: string | null
-): void {
-	const sessionIds = registry.roomManager.getParticipantSessionIds(roomCode)
+): Promise<void> {
+	const sessionIds = await registry.roomManager.getParticipantSessionIds(roomCode)
 
 	for (const sessionId of sessionIds) {
 		if (excludedSessionId && sessionId === excludedSessionId) {
