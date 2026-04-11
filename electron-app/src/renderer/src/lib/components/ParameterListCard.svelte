@@ -7,6 +7,8 @@
     ParamValue,
   } from "../../../../../../shared/src/index.ts";
 
+  const HIDDEN_PARAM_RE = /^VF\d+_TC_/;
+
   let {
     parameters = [],
     isOwner = false,
@@ -20,6 +22,10 @@
   } = $props();
 
   let open = $state(false);
+
+  let filteredParams = $derived(
+    parameters.filter((e) => !HIDDEN_PARAM_RE.test(shortName(e.path))),
+  );
 
   function shortName(path: string): string {
     const segments = path.split("/");
@@ -55,7 +61,7 @@
     <span class="flex items-center gap-1.5 font-medium text-foreground">
       <SlidersHorizontal class="size-3.5 text-muted-foreground" />
       Parameters
-      <span class="text-muted-foreground">({parameters.length})</span>
+      <span class="text-muted-foreground">({filteredParams.length})</span>
     </span>
     <ChevronDown
       class="size-3.5 text-muted-foreground transition-transform duration-200 {open
@@ -65,27 +71,38 @@
   </Collapsible.Trigger>
   <Collapsible.Content>
     <div
-      class="mt-1.5 max-h-52 overflow-y-auto rounded-md border border-border"
+      class="mt-1.5 max-h-52 overflow-y-auto overflow-x-hidden rounded-md border border-border"
+      style="scroll-behavior:smooth;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;"
     >
-      {#if parameters.length === 0}
+      {#if filteredParams.length === 0}
         <p class="px-2.5 py-3 text-center text-xs text-muted-foreground">
           No parameters received yet.
         </p>
       {:else}
-        {#each parameters as entry (entry.path)}
+        {#each filteredParams as entry (entry.path)}
           <div
-            class="flex items-center gap-2 border-b border-border px-2.5 py-1.5 last:border-b-0 text-xs"
+            class="border-b border-border px-2.5 py-1.5 last:border-b-0 text-xs"
           >
-            <!-- Param name -->
-            <span
-              class="min-w-0 flex-1 truncate font-mono text-foreground"
-              title={entry.path}
-            >
-              {shortName(entry.path)}
-            </span>
+            <!-- Row 1: Param name + sync toggle -->
+            <div class="flex items-center justify-between gap-2">
+              <span
+                class="min-w-0 truncate font-mono text-foreground"
+                title={entry.path}
+              >
+                {shortName(entry.path)}
+              </span>
+              {#if !isOwner}
+                <Switch
+                  size="sm"
+                  checked={entry.syncEnabled}
+                  onCheckedChange={(checked) =>
+                    onToggleSync(entry.path, checked)}
+                />
+              {/if}
+            </div>
 
-            <!-- Value control -->
-            <div class="flex shrink-0 items-center gap-1.5">
+            <!-- Row 2: Value control -->
+            <div class="mt-1 flex items-center gap-1.5">
               {#if entry.valueType === "bool"}
                 <Switch
                   size="sm"
@@ -94,6 +111,7 @@
                   onCheckedChange={(checked) =>
                     handleBoolChange(entry, checked)}
                 />
+                <span class="flex-1"></span>
               {:else if entry.valueType === "float"}
                 <input
                   type="range"
@@ -102,13 +120,15 @@
                   step="0.01"
                   value={typeof entry.value === "number" ? entry.value : 0}
                   disabled={!isOwner}
-                  class="h-1.5 w-16 accent-primary disabled:opacity-50"
+                  class="h-1.5 flex-1 accent-primary disabled:opacity-50"
                   oninput={(e) => handleSliderChange(entry, e)}
                 />
-                <span class="w-8 text-right text-muted-foreground">
+                <span
+                  class="w-8 shrink-0 text-right font-mono text-muted-foreground"
+                >
                   {typeof entry.value === "number"
                     ? entry.value.toFixed(2)
-                    : "0"}
+                    : "0.00"}
                 </span>
               {:else}
                 <!-- int -->
@@ -119,25 +139,18 @@
                   step="1"
                   value={typeof entry.value === "number" ? entry.value : 0}
                   disabled={!isOwner}
-                  class="h-1.5 w-16 accent-primary disabled:opacity-50"
+                  class="h-1.5 flex-1 accent-primary disabled:opacity-50"
                   oninput={(e) => handleSliderChange(entry, e)}
                 />
-                <span class="w-6 text-right text-muted-foreground">
+                <span
+                  class="w-8 shrink-0 text-right font-mono text-muted-foreground"
+                >
                   {typeof entry.value === "number"
-                    ? Math.round(entry.value)
-                    : "0"}
+                    ? String(Math.round(entry.value)).padStart(3, "\u2007")
+                    : "  0"}
                 </span>
               {/if}
             </div>
-
-            <!-- Sync toggle (non-owner only) -->
-            {#if !isOwner}
-              <Switch
-                size="sm"
-                checked={entry.syncEnabled}
-                onCheckedChange={(checked) => onToggleSync(entry.path, checked)}
-              />
-            {/if}
           </div>
         {/each}
       {/if}

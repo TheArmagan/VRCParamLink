@@ -152,3 +152,18 @@
   background: transparent;
  }
 }
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  20% { transform: translateX(0); }
+  80% { transform: translateX(calc(-100% + 4rem)); }
+  100% { transform: translateX(calc(-100% + 4rem)); }
+}
+
+.animate-marquee {
+  animation: none;
+}
+
+.group\/name:hover .animate-marquee {
+  animation: marquee 3s ease-in-out infinite;
+}

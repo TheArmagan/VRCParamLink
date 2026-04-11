@@ -20,8 +20,11 @@ import { RoomManagerError } from './room-errors.ts'
 import type { RedisClient } from './redis-client.ts'
 import { redisKeys, hashGetAll, hashGet, hashKeys, sortedRange, stringGet } from './redis-client.ts'
 import type { HandleParamBatchResult, LeaveRoomResult } from './room-types.ts'
+import { ParamRateTracker } from './param-rate-tracker.ts'
 
 export class RoomManager {
+  private readonly paramRateTracker = new ParamRateTracker()
+
   constructor(private readonly redis: RedisClient) { }
 
   async createRoom(sessionId: string, displayName: string, requestedSettings?: Partial<RoomSettings>): Promise<RoomJoinedPayload> {
@@ -148,6 +151,8 @@ export class RoomManager {
       multi.del(redisKeys.displayName(roomCode, participant.displayName))
       multi.del(redisKeys.session(sessionId))
       await multi.exec()
+
+      this.paramRateTracker.pruneRoom(roomCode)
 
       return { leftPayload, roomCode, deletedRoom: true }
     }
@@ -292,10 +297,17 @@ export class RoomManager {
     }
 
     let ownerChangedPayload: OwnerChangedPayload | undefined
+    const paramPaths = normalizedParams.map(p => p.path)
 
     if (roomMeta.ownerSessionId !== sessionId) {
       if (roomMeta.autoOwnerEnabled !== '1') {
         throw new RoomManagerError(ERROR_CODES.notOwner, 'Only the current owner can broadcast parameter updates.')
+      }
+
+      // Only transfer ownership if the batch contains at least one
+      // "stable" parameter (not rapidly changing like tracking data).
+      if (!this.paramRateTracker.hasStableParam(roomCode, paramPaths)) {
+        return null
       }
 
       const sessionAvatarId = (await hashGet(this.redis, redisKeys.session(sessionId), 'avatarId')) || ''
@@ -310,6 +322,9 @@ export class RoomManager {
         reason: 'auto_owner'
       }
     }
+
+    // Record param updates for rate tracking (used by auto-owner heuristic)
+    this.paramRateTracker.recordUpdates(roomCode, paramPaths)
 
     const stateUpdates: Record<string, string> = {}
     for (const param of normalizedParams) {
