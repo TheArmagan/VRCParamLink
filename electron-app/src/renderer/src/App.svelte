@@ -12,6 +12,7 @@
 
   let appState: RendererAppState = $state({
     appName: "VRCParamLink",
+    appVersion: "",
     screen: "welcome",
     selfSessionId: null,
     displayName: localStorage.getItem("vrcpl:displayName") ?? "",
@@ -196,6 +197,7 @@
 >
   <AppHeader
     appName={appState.appName}
+    appVersion={appState.appVersion}
     onClose={() => window.api.closeWindow()}
   />
 

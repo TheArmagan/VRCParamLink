@@ -82,7 +82,9 @@
       {#each participants as participant (participant.sessionId)}
         {@const params = getFilteredParams(participant.sessionId)}
         <Collapsible.Root
-          bind:open={expandedParticipants[participant.sessionId]}
+          open={expandedParticipants[participant.sessionId] ?? false}
+          onOpenChange={(v) =>
+            (expandedParticipants[participant.sessionId] = v)}
         >
           <Collapsible.Trigger
             class="flex w-full items-center justify-between rounded-md border border-border bg-muted/50 px-2 py-1.5 text-left text-xs"
