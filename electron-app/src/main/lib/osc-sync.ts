@@ -29,7 +29,7 @@ type SuppressedParamRecord = {
 /** Time window (ms) for measuring param update frequency. */
 const RATE_WINDOW_MS = 3_000
 /** Updates within the window to classify a param as rapidly changing. */
-const RAPID_CHANGE_THRESHOLD = 15
+const RAPID_CHANGE_THRESHOLD = 20
 
 export class OscSyncService {
   private readonly osc = new OSC({

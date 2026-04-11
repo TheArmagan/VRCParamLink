@@ -11,7 +11,7 @@ const RATE_WINDOW_MS = 3_000
  * If a parameter has been updated this many times or more within
  * the window, it is considered "rapidly changing" (e.g. tracking / continuous float).
  */
-const RAPID_CHANGE_THRESHOLD = 15
+const RAPID_CHANGE_THRESHOLD = 20
 
 export class ParamRateTracker {
   /** roomCode → paramPath → recent update timestamps */
