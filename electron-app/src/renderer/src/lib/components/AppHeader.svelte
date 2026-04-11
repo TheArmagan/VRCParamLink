@@ -4,9 +4,11 @@
 
   let {
     appName = "VRCParamLink",
+    appVersion = "",
     onClose = () => {},
   }: {
     appName?: string;
+    appVersion?: string;
     onClose?: () => void;
   } = $props();
 </script>
@@ -26,6 +28,11 @@
     >
       {appName}
     </h1>
+    {#if appVersion}
+      <span class="text-[10px] font-medium text-muted-foreground"
+        >v{appVersion}</span
+      >
+    {/if}
   </div>
 
   <div class="flex items-center gap-1">

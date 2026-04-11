@@ -9,6 +9,7 @@ import {
   type AvatarIdUpdatedPayload,
   type DisplayNameUpdatedPayload,
   type ErrorState,
+  type OutboundRemoteParamEditPayload,
   type OwnerChangedPayload,
   type OutboundParamBatchPayload,
   type ParamEntry,
@@ -25,6 +26,8 @@ const defaultRoomSettings = createDefaultRoomSettings()
 
 const state: RendererAppState = {
   appName: APP_NAME,
+  appVersion: '',
+
   screen: APP_SCREENS.welcome,
   selfSessionId: null,
   displayName: '',
@@ -48,13 +51,19 @@ const state: RendererAppState = {
   lastSyncParamName: null,
   selfAvatarId: null,
   ownerAvatarId: null,
-  avatarSyncActive: false
+  avatarSyncActive: false,
+  localPlaybackEnabled: true,
+  participantParams: {}
 }
 
 const syncToggles = new Map<string, boolean>()
 
 export function getAppState(): RendererAppState {
   return structuredClone(state)
+}
+
+export function setAppVersion(version: string): void {
+  state.appVersion = version
 }
 
 export function updateDisplayName(displayName: string): UpdateDisplayNameResult {
@@ -125,10 +134,13 @@ export function applyRoomJoined(payload: RoomJoinedPayload): void {
   if (payload.snapshot.length > 0) {
     updateParameterList(payload.snapshot)
     state.lastSyncParamName = extractShortParamName(payload.snapshot[0].path)
+    // Attribute snapshot params to owner
+    updateParticipantParams(payload.ownerSessionId, payload.snapshot)
   } else {
     state.parameterList = []
     state.lastSyncParamName = null
   }
+  state.participantParams = {}
 }
 
 export function applyParticipantJoined(payload: ParticipantJoinedPayload): void {
@@ -156,6 +168,7 @@ export function applyParticipantLeft(payload: ParticipantLeftPayload): void {
   }
 
   state.participantList = state.participantList.filter((participant) => participant.sessionId !== payload.sessionId)
+  delete state.participantParams[payload.sessionId]
 }
 
 export function applyDisplayNameUpdated(payload: DisplayNameUpdatedPayload): void {
@@ -210,6 +223,7 @@ export function applyParamBatch(_payload: OutboundParamBatchPayload): void {
   state.receivedBatchCount += 1
 
   updateParameterList(_payload.params)
+  updateParticipantParams(_payload.sourceSessionId, _payload.params)
   if (_payload.params.length > 0) {
     state.lastSyncParamName = extractShortParamName(_payload.params[0].path)
   }
@@ -228,8 +242,19 @@ export function applyLocalParamBatch(paramCount: number, params?: ParamValue[]):
 
   if (params && params.length > 0) {
     updateParameterList(params)
+    if (state.selfSessionId) {
+      updateParticipantParams(state.selfSessionId, params)
+    }
     state.lastSyncParamName = extractShortParamName(params[0].path)
   }
+}
+
+export function applyRemoteParamEdit(payload: OutboundRemoteParamEditPayload): void {
+  if (payload.roomCode !== state.roomCode) {
+    return
+  }
+
+  updateParticipantParams(payload.targetSessionId, payload.params)
 }
 
 export function clearRoomState(): void {
@@ -254,6 +279,7 @@ export function clearRoomState(): void {
   state.selfAvatarId = null
   state.ownerAvatarId = null
   state.avatarSyncActive = false
+  state.participantParams = {}
   syncToggles.clear()
 }
 
@@ -296,11 +322,19 @@ export function setParamSyncEnabled(path: string, enabled: boolean): void {
   )
 }
 
+export function setLocalPlaybackEnabled(enabled: boolean): void {
+  state.localPlaybackEnabled = enabled
+}
+
 export function isParamSyncEnabled(path: string): boolean {
   return syncToggles.get(path) ?? true
 }
 
 export function shouldApplyRemoteParam(path: string): boolean {
+  if (!state.localPlaybackEnabled) {
+    return false
+  }
+
   if (!state.avatarSyncActive) {
     return false
   }
@@ -346,4 +380,28 @@ function computeAvatarSyncActive(): boolean {
   }
 
   return state.selfAvatarId === state.ownerAvatarId
+}
+
+function updateParticipantParams(sessionId: string, params: ParamValue[]): void {
+  const now = Date.now()
+  const existing = state.participantParams[sessionId] ?? []
+  const entries = new Map<string, ParamEntry>()
+
+  for (const entry of existing) {
+    entries.set(entry.path, entry)
+  }
+
+  for (const param of params) {
+    entries.set(param.path, {
+      path: param.path,
+      valueType: param.valueType,
+      value: param.value,
+      updatedAt: now,
+      syncEnabled: true
+    })
+  }
+
+  state.participantParams[sessionId] = [...entries.values()]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, PARAM_LIST_MAX_SIZE)
 }

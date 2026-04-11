@@ -117,7 +117,10 @@ export const IPC_CHANNELS = {
   updateRoomSettings: 'app:update-room-settings',
   stateChanged: 'app:state-changed',
   toggleParamSync: 'app:toggle-param-sync',
-  editParam: 'app:edit-param'
+  toggleLocalPlayback: 'app:toggle-local-playback',
+  editParam: 'app:edit-param',
+  sendRemoteParamEdit: 'app:send-remote-param-edit',
+  sendAllParams: 'app:send-all-params'
 } as const
 
 const ROOM_CODE_PATTERN = new RegExp(`^[A-Z0-9]{${ROOM_CODE_LENGTH}}$`)

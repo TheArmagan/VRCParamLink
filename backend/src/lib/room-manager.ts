@@ -5,12 +5,14 @@ import {
   ROOM_MAX_PARTICIPANTS,
   type AvatarIdUpdatedPayload,
   type DisplayNameUpdatedPayload,
+  type OutboundRemoteParamEditPayload,
   type OwnerChangedPayload,
   type ParamBatchPayload,
   type ParamValue,
   type Participant,
   type ParticipantLeaveReason,
   type ParticipantLeftPayload,
+  type RemoteParamEditPayload,
   type RoomJoinedPayload,
   type RoomSettings,
   type RoomSettingsUpdatedPayload
@@ -373,6 +375,29 @@ export class RoomManager {
 
   async getParticipantSessionIds(roomCode: string): Promise<string[]> {
     return await hashKeys(this.redis, redisKeys.participants(roomCode))
+  }
+
+  async handleRemoteParamEdit(sessionId: string, payload: RemoteParamEditPayload): Promise<OutboundRemoteParamEditPayload> {
+    const session = await this.requireSession(sessionId)
+    const roomCode = session.roomCode
+
+    // Validate target is in the same room
+    const targetParticipantJson = await hashGet(this.redis, redisKeys.participants(roomCode), payload.targetSessionId)
+    if (!targetParticipantJson) {
+      throw new RoomManagerError(ERROR_CODES.invalidMessage, 'Target participant is not in the same room.')
+    }
+
+    const normalizedParams = normalizeParams(payload.params)
+    if (normalizedParams.length === 0) {
+      throw new RoomManagerError(ERROR_CODES.invalidMessage, 'No valid parameters provided.')
+    }
+
+    return {
+      roomCode,
+      sourceSessionId: sessionId,
+      targetSessionId: payload.targetSessionId,
+      params: normalizedParams
+    }
   }
 
   async toRoomState(roomCode: string, selfSessionId: string): Promise<RoomJoinedPayload> {

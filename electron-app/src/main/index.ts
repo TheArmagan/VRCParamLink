@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, setParamSyncEnabled, updateDisplayName } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, setAppVersion, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 
@@ -37,6 +37,14 @@ const backendClient = new BackendClient({
   },
   onRemoteParamBatch: (payload) => {
     oscSync.applyRemoteBatch(payload)
+  },
+  onRemoteParamEdit: (payload) => {
+    const state = getAppState()
+    if (payload.targetSessionId === state.selfSessionId) {
+      for (const param of payload.params) {
+        oscSync.sendSingleParam(param)
+      }
+    }
   },
   onRoomSnapshot: (snapshot) => {
     oscSync.applySnapshot(snapshot)
@@ -137,8 +145,40 @@ function registerIpcHandlers(): void {
     broadcastAppState()
   })
 
-  ipcMain.handle(IPC_CHANNELS.editParam, async (_event, param: ParamValue) => {
-    oscSync.sendSingleParam(param)
+  ipcMain.handle(IPC_CHANNELS.toggleLocalPlayback, async (_event, enabled: boolean) => {
+    setLocalPlaybackEnabled(enabled)
+    broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.editParam, async (_event, targetSessionId: string, param: ParamValue) => {
+    const state = getAppState()
+    if (targetSessionId === state.selfSessionId && state.localPlaybackEnabled) {
+      oscSync.sendSingleParam(param)
+    }
+    await backendClient.sendRemoteParamEdit(targetSessionId, [param])
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sendRemoteParamEdit, async (_event, targetSessionId: string, params: ParamValue[]) => {
+    const state = getAppState()
+    if (targetSessionId === state.selfSessionId && state.localPlaybackEnabled) {
+      for (const param of params) {
+        oscSync.sendSingleParam(param)
+      }
+    }
+    await backendClient.sendRemoteParamEdit(targetSessionId, params)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.sendAllParams, async () => {
+    const state = getAppState()
+    if (!state.roomCode || state.parameterList.length === 0) {
+      return
+    }
+    const params: ParamValue[] = state.parameterList.map((entry) => ({
+      path: entry.path,
+      valueType: entry.valueType,
+      value: entry.value
+    }))
+    await backendClient.sendParamBatch(0, params)
   })
 }
 
@@ -148,6 +188,8 @@ function registerIpcHandlers(): void {
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('rest.armagan.vrcparamlink')
+
+  setAppVersion(app.getVersion())
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

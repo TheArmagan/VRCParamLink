@@ -39,8 +39,17 @@ const api: DesktopApi = {
   toggleParamSync: async (path: string, enabled: boolean) => {
     await ipcRenderer.invoke(IPC_CHANNELS.toggleParamSync, path, enabled)
   },
-  editParam: async (param: ParamValue) => {
-    await ipcRenderer.invoke(IPC_CHANNELS.editParam, param)
+  toggleLocalPlayback: async (enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleLocalPlayback, enabled)
+  },
+  editParam: async (targetSessionId: string, param: ParamValue) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.editParam, targetSessionId, param)
+  },
+  sendRemoteParamEdit: async (targetSessionId: string, params: ParamValue[]) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.sendRemoteParamEdit, targetSessionId, params)
+  },
+  sendAllParams: async () => {
+    await ipcRenderer.invoke(IPC_CHANNELS.sendAllParams)
   },
   onStateChanged: (listener) => {
     const subscription = (_event: Electron.IpcRendererEvent, state: RendererAppState) => {

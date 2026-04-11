@@ -21,7 +21,9 @@
     onLeaveRoom = () => {},
     onTakeOwner = () => {},
     onToggleParamSync = (_path: string, _enabled: boolean) => {},
-    onEditParam = (_param: ParamValue) => {},
+    onToggleLocalPlayback = (_enabled: boolean) => {},
+    onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
+    onSendAllParams = () => {},
     onSaveRoomSettings = (
       _filterMode: FilterMode,
       _filterPathsText: string,
@@ -36,7 +38,9 @@
     onLeaveRoom?: () => void;
     onTakeOwner?: () => void;
     onToggleParamSync?: (path: string, enabled: boolean) => void;
-    onEditParam?: (param: ParamValue) => void;
+    onToggleLocalPlayback?: (enabled: boolean) => void;
+    onEditParam?: (targetSessionId: string, param: ParamValue) => void;
+    onSendAllParams?: () => void;
     onSaveRoomSettings?: (
       filterMode: FilterMode,
       filterPathsText: string,
@@ -83,6 +87,8 @@
         participants={appState.participantList}
         ownerSessionId={appState.ownerSessionId}
         selfSessionId={appState.selfSessionId}
+        participantParams={appState.participantParams}
+        {onEditParam}
       />
 
       <SyncStatusCard state={appState} />
@@ -90,8 +96,12 @@
       <ParameterListCard
         parameters={appState.parameterList}
         {isOwner}
+        selfSessionId={appState.selfSessionId}
+        localPlaybackEnabled={appState.localPlaybackEnabled}
         onToggleSync={onToggleParamSync}
+        {onToggleLocalPlayback}
         {onEditParam}
+        {onSendAllParams}
       />
 
       <Separator />

@@ -154,6 +154,19 @@ export interface OutboundParamBatchPayload {
   sourceSessionId: string
   batchSeq: number
   params: ParamValue[]
+  forceApply?: boolean
+}
+
+export interface RemoteParamEditPayload {
+  targetSessionId: string
+  params: ParamValue[]
+}
+
+export interface OutboundRemoteParamEditPayload {
+  roomCode: string
+  sourceSessionId: string
+  targetSessionId: string
+  params: ParamValue[]
 }
 
 export interface ErrorPayload extends ErrorState {
@@ -162,6 +175,7 @@ export interface ErrorPayload extends ErrorState {
 
 export interface RendererAppState {
   appName: string
+  appVersion: string
   screen: AppScreen
   selfSessionId: string | null
   displayName: string
@@ -186,6 +200,8 @@ export interface RendererAppState {
   selfAvatarId: string | null
   ownerAvatarId: string | null
   avatarSyncActive: boolean
+  localPlaybackEnabled: boolean
+  participantParams: Record<string, ParamEntry[]>
 }
 
 export type AppActionResult =
@@ -204,7 +220,10 @@ export interface DesktopApi {
   takeOwner: () => Promise<AppActionResult>
   updateRoomSettings: (settings: Partial<RoomSettings>) => Promise<AppActionResult>
   toggleParamSync: (path: string, enabled: boolean) => Promise<void>
-  editParam: (param: ParamValue) => Promise<void>
+  toggleLocalPlayback: (enabled: boolean) => Promise<void>
+  editParam: (targetSessionId: string, param: ParamValue) => Promise<void>
+  sendRemoteParamEdit: (targetSessionId: string, params: ParamValue[]) => Promise<void>
+  sendAllParams: () => Promise<void>
   onStateChanged: (listener: (state: RendererAppState) => void) => () => void
 }
 
@@ -218,6 +237,7 @@ export type ClientToServerMessage =
   | SocketEnvelope<ParamBatchPayload>
   | SocketEnvelope<HeartbeatPayload>
   | SocketEnvelope<AvatarChangePayload>
+  | SocketEnvelope<RemoteParamEditPayload>
 
 export type ServerToClientMessage =
   | SocketEnvelope<HelloAckPayload>
@@ -230,6 +250,7 @@ export type ServerToClientMessage =
   | SocketEnvelope<OwnerChangedPayload>
   | SocketEnvelope<OutboundParamBatchPayload>
   | SocketEnvelope<AvatarIdUpdatedPayload>
+  | SocketEnvelope<OutboundRemoteParamEditPayload>
   | SocketEnvelope<ErrorPayload>
 
 export type TypedClientEvent = ClientEventType

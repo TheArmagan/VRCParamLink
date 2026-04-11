@@ -8,7 +8,8 @@ export const CLIENT_EVENT_TYPES = {
   setRoomSettings: 'set_room_settings',
   paramBatch: 'param_batch',
   heartbeat: 'heartbeat',
-  avatarChange: 'avatar_change'
+  avatarChange: 'avatar_change',
+  remoteParamEdit: 'remote_param_edit'
 } as const
 
 export const SERVER_EVENT_TYPES = {
@@ -22,6 +23,7 @@ export const SERVER_EVENT_TYPES = {
   ownerChanged: 'owner_changed',
   paramBatch: 'param_batch',
   avatarIdUpdated: 'avatar_id_updated',
+  remoteParamEdit: 'remote_param_edit',
   error: 'error'
 } as const
 

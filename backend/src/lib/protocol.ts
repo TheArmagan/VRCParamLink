@@ -7,6 +7,7 @@ import {
   type JoinRoomPayload,
   type CreateRoomPayload,
   type ParamBatchPayload,
+  type RemoteParamEditPayload,
   type SetDisplayNamePayload,
   type SetRoomSettingsPayload,
   type SocketEnvelope
@@ -164,4 +165,23 @@ export function isParamBatchPayload(payload: unknown): payload is ParamBatchPayl
 
 export function isAvatarChangePayload(payload: unknown): payload is AvatarChangePayload {
   return isPlainObject(payload) && typeof payload.avatarId === 'string' && payload.avatarId.length > 0
+}
+
+export function isRemoteParamEditPayload(payload: unknown): payload is RemoteParamEditPayload {
+  if (!isPlainObject(payload) || typeof payload.targetSessionId !== 'string' || !Array.isArray(payload.params)) {
+    return false
+  }
+
+  return payload.params.every((entry) => {
+    if (!isPlainObject(entry)) {
+      return false
+    }
+
+    const hasValidValueType = entry.valueType === 'bool' || entry.valueType === 'int' || entry.valueType === 'float'
+    const hasValidValue =
+      (entry.valueType === 'bool' && typeof entry.value === 'boolean') ||
+      ((entry.valueType === 'int' || entry.valueType === 'float') && typeof entry.value === 'number')
+
+    return typeof entry.path === 'string' && hasValidValueType && hasValidValue
+  })
 }

@@ -11,6 +11,7 @@ import {
   type DisplayNameUpdatedPayload,
   type ErrorPayload,
   type HelloAckPayload,
+  type OutboundRemoteParamEditPayload,
   type OwnerChangedPayload,
   type OutboundParamBatchPayload,
   type ParamValue,
@@ -30,6 +31,7 @@ import {
   applyParamBatch,
   applyParticipantJoined,
   applyParticipantLeft,
+  applyRemoteParamEdit,
   applyRoomJoined,
   applyRoomSettingsUpdated,
   clearRoomState,
@@ -47,6 +49,7 @@ type PendingRequest = {
 type BackendClientOptions = {
   notifyStateChanged: () => void
   onRemoteParamBatch?: (payload: OutboundParamBatchPayload) => void
+  onRemoteParamEdit?: (payload: OutboundRemoteParamEditPayload) => void
   onRoomSnapshot?: (snapshot: ParamValue[]) => void
 }
 
@@ -116,6 +119,24 @@ export class BackendClient {
     }
 
     this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.avatarChange, { avatarId })))
+  }
+
+  async sendRemoteParamEdit(targetSessionId: string, params: ParamValue[]): Promise<void> {
+    const state = getAppState()
+    if (!state.roomCode || params.length === 0) {
+      return
+    }
+
+    const connectionResult = await this.ensureConnected(state.displayName || 'Guest')
+    if (!connectionResult.ok) {
+      return
+    }
+
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.remoteParamEdit, { targetSessionId, params })))
   }
 
   async ensureConnected(displayName: string): Promise<AppActionResult> {
@@ -259,6 +280,12 @@ export class BackendClient {
       case SERVER_EVENT_TYPES.avatarIdUpdated:
         applyAvatarIdUpdated(envelope.payload as AvatarIdUpdatedPayload)
         break
+      case SERVER_EVENT_TYPES.remoteParamEdit: {
+        const remoteEditPayload = envelope.payload as OutboundRemoteParamEditPayload
+        applyRemoteParamEdit(remoteEditPayload)
+        this.options.onRemoteParamEdit?.(remoteEditPayload)
+        break
+      }
       case SERVER_EVENT_TYPES.error:
         setErrorState(envelope.payload as ErrorPayload)
         break

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { SlidersHorizontal, ChevronDown } from "@lucide/svelte";
+  import { SlidersHorizontal, ChevronDown, RefreshCw } from "@lucide/svelte";
   import { Switch } from "$lib/components/ui/switch/index.js";
+  import { Button } from "$lib/components/ui/button/index.js";
   import * as Collapsible from "$lib/components/ui/collapsible/index.js";
   import type {
     ParamEntry,
@@ -12,13 +13,21 @@
   let {
     parameters = [],
     isOwner = false,
+    selfSessionId = null,
+    localPlaybackEnabled = true,
     onToggleSync = (_path: string, _enabled: boolean) => {},
-    onEditParam = (_param: ParamValue) => {},
+    onToggleLocalPlayback = (_enabled: boolean) => {},
+    onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
+    onSendAllParams = () => {},
   }: {
     parameters: ParamEntry[];
     isOwner: boolean;
+    selfSessionId: string | null;
+    localPlaybackEnabled: boolean;
     onToggleSync?: (path: string, enabled: boolean) => void;
-    onEditParam?: (param: ParamValue) => void;
+    onToggleLocalPlayback?: (enabled: boolean) => void;
+    onEditParam?: (targetSessionId: string, param: ParamValue) => void;
+    onSendAllParams?: () => void;
   } = $props();
 
   let open = $state(false);
@@ -33,7 +42,8 @@
   }
 
   function handleBoolChange(entry: ParamEntry, checked: boolean): void {
-    onEditParam({
+    if (!selfSessionId) return;
+    onEditParam(selfSessionId, {
       path: entry.path,
       valueType: "bool",
       value: checked,
@@ -44,9 +54,10 @@
     entry: ParamEntry,
     event: Event & { currentTarget: HTMLInputElement },
   ): void {
+    if (!selfSessionId) return;
     const raw = parseFloat(event.currentTarget.value);
     const value = entry.valueType === "int" ? Math.round(raw) : raw;
-    onEditParam({
+    onEditParam(selfSessionId, {
       path: entry.path,
       valueType: entry.valueType,
       value,
@@ -71,8 +82,30 @@
   </Collapsible.Trigger>
   <Collapsible.Content>
     <div
+      class="mt-1.5 flex items-center justify-between rounded-md border border-border px-2.5 py-1.5 text-xs"
+    >
+      <span class="text-muted-foreground">Affect local player</span>
+      <Switch
+        size="sm"
+        checked={localPlaybackEnabled}
+        onCheckedChange={(checked) => onToggleLocalPlayback(checked)}
+      />
+    </div>
+    <div class="mt-1.5">
+      <Button
+        variant="outline"
+        size="sm"
+        class="w-full text-xs"
+        onclick={() => onSendAllParams()}
+        disabled={filteredParams.length === 0}
+      >
+        <RefreshCw class="mr-1.5 size-3.5" />
+        Send All Parameters
+      </Button>
+    </div>
+    <div
       class="mt-1.5 max-h-52 overflow-y-auto overflow-x-hidden rounded-md border border-border"
-      style="scroll-behavior:smooth;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;"
+      style="scroll-behavior:smooth;-webkit-overflow-scrolling:touch;"
     >
       {#if filteredParams.length === 0}
         <p class="px-2.5 py-3 text-center text-xs text-muted-foreground">
@@ -107,7 +140,6 @@
                 <Switch
                   size="sm"
                   checked={entry.value === true}
-                  disabled={!isOwner}
                   onCheckedChange={(checked) =>
                     handleBoolChange(entry, checked)}
                 />
@@ -119,8 +151,7 @@
                   max="1"
                   step="0.01"
                   value={typeof entry.value === "number" ? entry.value : 0}
-                  disabled={!isOwner}
-                  class="h-1.5 flex-1 accent-primary disabled:opacity-50"
+                  class="h-1.5 flex-1 accent-primary"
                   oninput={(e) => handleSliderChange(entry, e)}
                 />
                 <span
@@ -138,8 +169,7 @@
                   max="255"
                   step="1"
                   value={typeof entry.value === "number" ? entry.value : 0}
-                  disabled={!isOwner}
-                  class="h-1.5 flex-1 accent-primary disabled:opacity-50"
+                  class="h-1.5 flex-1 accent-primary"
                   oninput={(e) => handleSliderChange(entry, e)}
                 />
                 <span

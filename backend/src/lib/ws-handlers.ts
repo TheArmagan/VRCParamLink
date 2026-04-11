@@ -18,6 +18,7 @@ import {
 	isHelloPayload,
 	isJoinRoomPayload,
 	isParamBatchPayload,
+	isRemoteParamEditPayload,
 	isSetDisplayNamePayload,
 	isSetRoomSettingsPayload,
 	parseSocketEnvelope
@@ -57,6 +58,9 @@ export function createSocketHandlers(registry: SocketRegistry) {
 				break
 			case CLIENT_EVENT_TYPES.avatarChange:
 				await handleAvatarChange(ws, envelope)
+				break
+			case CLIENT_EVENT_TYPES.remoteParamEdit:
+				await handleRemoteParamEdit(ws, envelope)
 				break
 			case CLIENT_EVENT_TYPES.heartbeat:
 				handleHeartbeat(ws, envelope)
@@ -333,6 +337,29 @@ export function createSocketHandlers(registry: SocketRegistry) {
 				registry,
 				payload.roomCode,
 				createEnvelope(SERVER_EVENT_TYPES.avatarIdUpdated, payload)
+			)
+		} catch (error) {
+			handleDomainError(ws, error, envelope.requestId)
+		}
+	}
+
+	async function handleRemoteParamEdit(ws: ServerWebSocket<ConnectionContext>, envelope: ParsedSocketEnvelope): Promise<void> {
+		if (!isRemoteParamEditPayload(envelope.payload)) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'Invalid remote_param_edit payload.', envelope.requestId)
+			return
+		}
+
+		if (!ws.data.sessionId) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'No active session found.', envelope.requestId)
+			return
+		}
+
+		try {
+			const result = await registry.roomManager.handleRemoteParamEdit(ws.data.sessionId, envelope.payload)
+			await broadcastToRoom(
+				registry,
+				result.roomCode,
+				createEnvelope(SERVER_EVENT_TYPES.remoteParamEdit, result)
 			)
 		} catch (error) {
 			handleDomainError(ws, error, envelope.requestId)

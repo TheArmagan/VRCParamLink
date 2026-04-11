@@ -36,6 +36,8 @@
     selfAvatarId: null,
     ownerAvatarId: null,
     avatarSyncActive: false,
+    localPlaybackEnabled: true,
+    participantParams: {},
   });
 
   let displayNameDraft = $state("");
@@ -168,8 +170,20 @@
     await window.api.toggleParamSync(path, enabled);
   }
 
-  async function editParam(param: ParamValue): Promise<void> {
-    await window.api.editParam(param);
+  async function toggleLocalPlayback(enabled: boolean): Promise<void> {
+    await window.api.toggleLocalPlayback(enabled);
+  }
+
+  async function editParam(
+    targetSessionId: string,
+    param: ParamValue,
+  ): Promise<void> {
+    await window.api.editParam(targetSessionId, param);
+  }
+
+  async function sendAllParams(): Promise<void> {
+    await window.api.sendAllParams();
+    uiMessage = "All parameters sent for resync.";
   }
 
   $effect(() => {
@@ -195,7 +209,9 @@
         onLeaveRoom={leaveRoom}
         onTakeOwner={takeOwner}
         onToggleParamSync={toggleParamSync}
+        onToggleLocalPlayback={toggleLocalPlayback}
         onEditParam={editParam}
+        onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}
       />
     {:else}
