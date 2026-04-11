@@ -4,11 +4,13 @@
     "src/renderer/src/env.d.ts",
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.svelte",
-    "src/preload/*.d.ts"
+    "src/preload/*.d.ts",
+    "../shared/src/**/*"
   ],
   "compilerOptions": {
     "verbatimModuleSyntax": true,
     "useDefineForClassFields": true,
+    "allowArbitraryExtensions": true,
     "strict": false,
     "allowJs": true,
     "checkJs": true,
@@ -19,10 +21,10 @@
     ],
     "paths": {
       "$lib": [
-        "./src/renderer/lib"
+        "./src/renderer/src/lib"
       ],
       "$lib/*": [
-        "./src/renderer/lib/*"
+        "./src/renderer/src/lib/*"
       ]
     }
   }

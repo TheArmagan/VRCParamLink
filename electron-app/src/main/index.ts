@@ -2,6 +2,41 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { IPC_CHANNELS } from '../../../shared/src/index.ts'
+import { getAppState, updateDisplayName } from './lib/app-state.ts'
+import { BackendClient } from './lib/backend-client.ts'
+import { OscSyncService } from './lib/osc-sync.ts'
+
+const oscSync = new OscSyncService({
+  onLocalParamBatch: async (params, batchSeq) => {
+    const state = getAppState()
+    const isOwner = Boolean(state.selfSessionId && state.selfSessionId === state.ownerSessionId)
+
+    if (!state.roomCode || (!isOwner && !state.autoOwnerEnabled)) {
+      return
+    }
+
+    const result = await backendClient.sendParamBatch(batchSeq, params)
+    if (!result.ok) {
+      broadcastAppState()
+    }
+  },
+  onError: (error) => {
+    console.error('[osc] sync error', error)
+  }
+})
+
+const backendClient = new BackendClient({
+  notifyStateChanged: () => {
+    broadcastAppState()
+  },
+  onRemoteParamBatch: (payload) => {
+    oscSync.applyRemoteBatch(payload)
+  },
+  onRoomSnapshot: (snapshot) => {
+    oscSync.applySnapshot(snapshot)
+  }
+})
 
 function createWindow(): void {
   // Create the browser window.
@@ -11,6 +46,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     resizable: false,
     frame: false,
+    backgroundColor: '#00000000',
     backgroundMaterial: 'acrylic',
     center: true,
     darkTheme: true,
@@ -38,10 +74,58 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
 
-  ipcMain.on("exit", () => {
-    app.quit();
-  });
+function broadcastAppState(): void {
+  const nextState = getAppState()
+
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(IPC_CHANNELS.stateChanged, nextState)
+  }
+}
+
+function registerIpcHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.getState, () => {
+    return getAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.updateDisplayName, (_event, displayName: string) => {
+    if (getAppState().roomCode) {
+      return backendClient.updateDisplayName(displayName)
+    }
+
+    const result = updateDisplayName(displayName)
+
+    if (result.ok) {
+      broadcastAppState()
+    }
+
+    return result
+  })
+
+  ipcMain.handle(IPC_CHANNELS.closeWindow, async () => {
+    app.quit()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.createRoom, async () => {
+    return backendClient.createRoom()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.joinRoom, async (_event, roomCode: string) => {
+    return backendClient.joinRoom(roomCode)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.leaveRoom, async () => {
+    return backendClient.leaveRoom()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.takeOwner, async () => {
+    return backendClient.takeOwner()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.updateRoomSettings, async (_event, settings) => {
+    return backendClient.updateRoomSettings(settings)
+  })
 }
 
 // This method will be called when Electron has finished
@@ -55,6 +139,8 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  oscSync.start()
+  registerIpcHandlers()
   createWindow()
 
   app.on('activate', function () {
@@ -63,6 +149,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  oscSync.stop()
   if (process.platform !== 'darwin') {
     app.quit()
   }

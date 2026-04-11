@@ -1,0 +1,132 @@
+<script lang="ts">
+  import type {
+    FilterMode,
+    RendererAppState,
+  } from "../../../../../../shared/src/index.ts";
+  import FilterSettingsCard from "./FilterSettingsCard.svelte";
+  import OwnerControlsCard from "./OwnerControlsCard.svelte";
+  import ParticipantsCard from "./ParticipantsCard.svelte";
+  import RoomSummaryCard from "./RoomSummaryCard.svelte";
+  import SyncStatusCard from "./SyncStatusCard.svelte";
+  import * as Card from "$lib/components/ui/card/index.js";
+  import { Separator } from "$lib/components/ui/separator/index.js";
+
+  let {
+    appState,
+    displayNameDraft = $bindable(""),
+    uiMessage = "",
+    onSaveDisplayName = () => {},
+    onLeaveRoom = () => {},
+    onTakeOwner = () => {},
+    onSaveRoomSettings = (
+      _filterMode: FilterMode,
+      _filterPathsText: string,
+      _autoOwnerEnabled: boolean,
+      _instantOwnerTakeoverEnabled: boolean,
+    ) => {},
+  }: {
+    appState: RendererAppState;
+    displayNameDraft?: string;
+    uiMessage?: string;
+    onSaveDisplayName?: () => void;
+    onLeaveRoom?: () => void;
+    onTakeOwner?: () => void;
+    onSaveRoomSettings?: (
+      filterMode: FilterMode,
+      filterPathsText: string,
+      autoOwnerEnabled: boolean,
+      instantOwnerTakeoverEnabled: boolean,
+    ) => void;
+  } = $props();
+
+  let isOwner = $derived(
+    Boolean(
+      appState.selfSessionId &&
+      appState.selfSessionId === appState.ownerSessionId,
+    ),
+  );
+
+  let filterModeDraft: FilterMode = $state(appState.filterMode);
+  let filterPathsDraft = $state(appState.filterPaths.join("\n"));
+  let autoOwnerDraft = $state(appState.autoOwnerEnabled);
+  let instantOwnerDraft = $state(appState.instantOwnerTakeoverEnabled);
+
+  $effect(() => {
+    if (appState.roomCode) {
+      filterModeDraft = appState.filterMode;
+      filterPathsDraft = appState.filterPaths.join("\n");
+      autoOwnerDraft = appState.autoOwnerEnabled;
+      instantOwnerDraft = appState.instantOwnerTakeoverEnabled;
+    }
+  });
+</script>
+
+<section class="flex flex-1 flex-col gap-2.5 overflow-y-auto p-3">
+  <Card.Root size="sm" class="overflow-visible border-border bg-card">
+    <Card.Content class="grid gap-3">
+      <RoomSummaryCard
+        state={appState}
+        bind:displayNameDraft
+        {onSaveDisplayName}
+        {onLeaveRoom}
+      />
+
+      <Separator />
+
+      <ParticipantsCard
+        participants={appState.participantList}
+        ownerSessionId={appState.ownerSessionId}
+        selfSessionId={appState.selfSessionId}
+      />
+
+      <SyncStatusCard state={appState} />
+
+      <Separator />
+
+      <OwnerControlsCard
+        {isOwner}
+        autoOwnerEnabled={autoOwnerDraft}
+        instantOwnerTakeoverEnabled={instantOwnerDraft}
+        canTakeOwner={Boolean(appState.participantList.length > 1)}
+        {onTakeOwner}
+        onToggleAutoOwner={(enabled) => {
+          autoOwnerDraft = enabled;
+          onSaveRoomSettings(
+            filterModeDraft,
+            filterPathsDraft,
+            enabled,
+            instantOwnerDraft,
+          );
+        }}
+        onToggleInstantOwner={(enabled) => {
+          instantOwnerDraft = enabled;
+          onSaveRoomSettings(
+            filterModeDraft,
+            filterPathsDraft,
+            autoOwnerDraft,
+            enabled,
+          );
+        }}
+      />
+
+      <FilterSettingsCard
+        {isOwner}
+        bind:filterMode={filterModeDraft}
+        bind:filterPathsText={filterPathsDraft}
+        onSave={(nextFilterMode, nextFilterPathsText) =>
+          onSaveRoomSettings(
+            nextFilterMode,
+            nextFilterPathsText,
+            autoOwnerDraft,
+            instantOwnerDraft,
+          )}
+      />
+    </Card.Content>
+  </Card.Root>
+
+  {#if uiMessage}
+    <p class="px-1 text-xs leading-5 text-muted-foreground">
+      {uiMessage}
+    </p>
+  {/if}
+</section>

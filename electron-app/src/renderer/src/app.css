@@ -38,19 +38,19 @@
 }
  
 .dark {
- --background: oklch(0.145 0 0);
+ --background: transparent;
  --foreground: oklch(0.985 0 0);
- --card: oklch(0.205 0 0);
+ --card: oklch(0.205 0 0 / 60%);
  --card-foreground: oklch(0.985 0 0);
- --popover: oklch(0.269 0 0);
+ --popover: oklch(0.269 0 0 / 80%);
  --popover-foreground: oklch(0.985 0 0);
  --primary: oklch(0.922 0 0);
  --primary-foreground: oklch(0.205 0 0);
- --secondary: oklch(0.269 0 0);
+ --secondary: oklch(0.269 0 0 / 60%);
  --secondary-foreground: oklch(0.985 0 0);
- --muted: oklch(0.269 0 0);
+ --muted: oklch(0.269 0 0 / 50%);
  --muted-foreground: oklch(0.708 0 0);
- --accent: oklch(0.371 0 0);
+ --accent: oklch(0.371 0 0 / 50%);
  --accent-foreground: oklch(0.985 0 0);
  --destructive: oklch(0.704 0.191 22.216);
  --border: oklch(1 0 0 / 10%);
@@ -110,7 +110,45 @@
 }
  
 @layer base {
+ html,
+ body,
+ #app {
+  @apply h-full bg-transparent;
+ }
+
+ body {
+  @apply overflow-hidden text-foreground antialiased;
+ }
+
  * {
   @apply border-border outline-ring/50;
+ }
+
+ ::selection {
+  @apply bg-primary/20 text-foreground;
+ }
+
+ /* Custom scrollbar */
+ ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+ }
+
+ ::-webkit-scrollbar-track {
+  background: transparent;
+ }
+
+ ::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 8%);
+  border-radius: 999px;
+  transition: background 0.2s;
+ }
+
+ ::-webkit-scrollbar-thumb:hover {
+  background: oklch(1 0 0 / 16%);
+ }
+
+ ::-webkit-scrollbar-corner {
+  background: transparent;
  }
 }
