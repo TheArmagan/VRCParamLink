@@ -7,13 +7,14 @@ export const ROOM_CODE_LENGTH = 16
 export const ROOM_CODE_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 export const ROOM_MAX_PARTICIPANTS = 8
 export const PARAM_BATCH_INTERVAL_MS = 100
+export const RAPID_PARAM_THROTTLE_MS = 5_000
 export const RECONNECT_GRACE_MS = 10_000
 export const HEARTBEAT_INTERVAL_MS = 5_000
 export const HEARTBEAT_TIMEOUT_MS = 10_000
 export const SUPPORTED_OSC_PREFIX = '/avatar'
 export const AVATAR_PARAMS_PREFIX = '/avatar/parameters/'
 export const AVATAR_CHANGE_OSC_ADDRESS = '/avatar/change'
-export const PARAM_LIST_MAX_SIZE = 50
+export const PARAM_LIST_MAX_SIZE = 200
 
 /**
  * VRChat built-in avatar parameters that should never be synced.

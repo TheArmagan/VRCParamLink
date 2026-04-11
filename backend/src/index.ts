@@ -3,12 +3,14 @@ import {
 	DEFAULT_BACKEND_PORT,
 	ERROR_CODES,
 	HEARTBEAT_INTERVAL_MS,
-	HEARTBEAT_TIMEOUT_MS
+	HEARTBEAT_TIMEOUT_MS,
+	RAPID_PARAM_THROTTLE_MS,
+	SERVER_EVENT_TYPES
 } from '../../shared/src/index.ts'
-import { parseSocketEnvelope, requiresHandshake } from './lib/protocol.ts'
+import { createEnvelope, parseSocketEnvelope, requiresHandshake } from './lib/protocol.ts'
 import { connectRedis } from './lib/redis-client.ts'
 import { createSocketHandlers } from './lib/ws-handlers.ts'
-import { sendError } from './lib/ws-messaging.ts'
+import { broadcastToRoom, sendError } from './lib/ws-messaging.ts'
 import { createSocketRegistry } from './lib/ws-state.ts'
 import { createConnectionContext, type ConnectionContext } from './lib/ws-types.ts'
 
@@ -79,5 +81,27 @@ setInterval(() => {
 		socket.close(4000, 'heartbeat_timeout')
 	}
 }, HEARTBEAT_INTERVAL_MS)
+
+// Flush throttled rapid params periodically
+setInterval(async () => {
+	const entries = registry.roomManager.flushThrottledParams()
+	for (const entry of entries) {
+		try {
+			await broadcastToRoom(
+				registry,
+				entry.roomCode,
+				createEnvelope(SERVER_EVENT_TYPES.paramBatch, {
+					roomCode: entry.roomCode,
+					sourceSessionId: entry.sourceSessionId,
+					batchSeq: 0,
+					params: entry.params
+				}),
+				entry.sourceSessionId
+			)
+		} catch (err) {
+			console.error('[throttle] flush broadcast failed', err)
+		}
+	}
+}, RAPID_PARAM_THROTTLE_MS)
 
 console.log(`[server] listening on ws://localhost:${server.port}`)

@@ -21,11 +21,13 @@ import { mergeSettings, normalizeParams, generateRoomCodeCandidate } from './roo
 import { RoomManagerError } from './room-errors.ts'
 import type { RedisClient } from './redis-client.ts'
 import { redisKeys, hashGetAll, hashGet, hashKeys, sortedRange, stringGet } from './redis-client.ts'
-import type { HandleParamBatchResult, LeaveRoomResult } from './room-types.ts'
+import type { HandleParamBatchResult, LeaveRoomResult, ThrottledFlushEntry } from './room-types.ts'
 import { ParamRateTracker } from './param-rate-tracker.ts'
+import { ParamThrottleBuffer } from './param-throttle-buffer.ts'
 
 export class RoomManager {
   private readonly paramRateTracker = new ParamRateTracker()
+  private readonly paramThrottleBuffer = new ParamThrottleBuffer()
 
   constructor(private readonly redis: RedisClient) { }
 
@@ -155,6 +157,7 @@ export class RoomManager {
       await multi.exec()
 
       this.paramRateTracker.pruneRoom(roomCode)
+      this.paramThrottleBuffer.pruneRoom(roomCode)
 
       return { leftPayload, roomCode, deletedRoom: true }
     }
@@ -298,51 +301,41 @@ export class RoomManager {
       throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
     }
 
-    let ownerChangedPayload: OwnerChangedPayload | undefined
     const paramPaths = normalizedParams.map(p => p.path)
 
-    if (roomMeta.ownerSessionId !== sessionId) {
-      if (roomMeta.autoOwnerEnabled !== '1') {
-        throw new RoomManagerError(ERROR_CODES.notOwner, 'Only the current owner can broadcast parameter updates.')
-      }
-
-      // Only transfer ownership if the batch contains at least one
-      // "stable" parameter (not rapidly changing like tracking data).
-      if (!this.paramRateTracker.hasStableParam(roomCode, paramPaths)) {
-        return null
-      }
-
-      const sessionAvatarId = (await hashGet(this.redis, redisKeys.session(sessionId), 'avatarId')) || ''
-      await this.redis.hSet(redisKeys.room(roomCode), {
-        ownerSessionId: sessionId,
-        ownerAvatarId: sessionAvatarId
-      })
-      ownerChangedPayload = {
-        roomCode,
-        ownerSessionId: sessionId,
-        previousOwnerSessionId: roomMeta.ownerSessionId,
-        reason: 'auto_owner'
-      }
-    }
-
-    // Record param updates for rate tracking (used by auto-owner heuristic)
+    // Record param updates for rate tracking
     this.paramRateTracker.recordUpdates(roomCode, paramPaths)
 
+    // Always persist all params in Redis immediately (state is always fresh)
     const stateUpdates: Record<string, string> = {}
     for (const param of normalizedParams) {
       stateUpdates[param.path] = JSON.stringify(param)
     }
     await this.redis.hSet(redisKeys.state(roomCode), stateUpdates)
 
-    return {
-      outboundPayload: {
-        roomCode,
-        sourceSessionId: sessionId,
-        batchSeq: payload.batchSeq,
-        params: normalizedParams
-      },
-      ownerChangedPayload
+    // Split params: stable → broadcast immediately, rapid → buffer for throttled flush
+    const stableParams = normalizedParams.filter(p => !this.paramRateTracker.isRapidParam(roomCode, p.path))
+    const rapidParams = normalizedParams.filter(p => this.paramRateTracker.isRapidParam(roomCode, p.path))
+
+    if (rapidParams.length > 0) {
+      this.paramThrottleBuffer.add(roomCode, sessionId, rapidParams)
     }
+
+    return {
+      outboundPayload: stableParams.length > 0
+        ? {
+          roomCode,
+          sourceSessionId: sessionId,
+          batchSeq: payload.batchSeq,
+          params: stableParams
+        }
+        : null
+    }
+  }
+
+  /** Drain all buffered rapid params for throttled broadcast. */
+  flushThrottledParams(): ThrottledFlushEntry[] {
+    return this.paramThrottleBuffer.flush()
   }
 
   async getRoomCodeBySession(sessionId: string): Promise<string | null> {

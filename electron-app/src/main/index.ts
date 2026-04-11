@@ -10,9 +10,8 @@ import { OscSyncService } from './lib/osc-sync.ts'
 const oscSync = new OscSyncService({
   onLocalParamBatch: async (params, batchSeq) => {
     const state = getAppState()
-    const isOwner = Boolean(state.selfSessionId && state.selfSessionId === state.ownerSessionId)
 
-    if (!state.roomCode || (!isOwner && !state.autoOwnerEnabled)) {
+    if (!state.roomCode) {
       return
     }
 

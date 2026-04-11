@@ -70,6 +70,32 @@ export class ParamRateTracker {
     return false // every param in the batch is rapidly changing
   }
 
+  /**
+   * Returns `true` if the given param is rapidly changing (above threshold).
+   * Used by adaptive throttling to decide per-param broadcast strategy.
+   */
+  isRapidParam(roomCode: string, paramPath: string): boolean {
+    const roomMap = this.history.get(roomCode)
+    if (!roomMap) return false
+
+    const timestamps = roomMap.get(paramPath)
+    if (!timestamps) return false
+
+    const now = Date.now()
+    const cutoff = now - RATE_WINDOW_MS
+
+    // Prune old entries in-place
+    const firstValidIdx = timestamps.findIndex(t => t >= cutoff)
+    if (firstValidIdx > 0) {
+      timestamps.splice(0, firstValidIdx)
+    } else if (firstValidIdx === -1) {
+      roomMap.delete(paramPath)
+      return false
+    }
+
+    return timestamps.length >= RAPID_CHANGE_THRESHOLD
+  }
+
   /** Remove all tracking data for a room (call on room deletion). */
   pruneRoom(roomCode: string): void {
     this.history.delete(roomCode)

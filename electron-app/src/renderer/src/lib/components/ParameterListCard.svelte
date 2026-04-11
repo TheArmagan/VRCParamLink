@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { SlidersHorizontal, ChevronDown, RefreshCw } from "@lucide/svelte";
+  import {
+    SlidersHorizontal,
+    ChevronDown,
+    RefreshCw,
+    Search,
+  } from "@lucide/svelte";
   import { Switch } from "$lib/components/ui/switch/index.js";
   import { Button } from "$lib/components/ui/button/index.js";
   import * as Collapsible from "$lib/components/ui/collapsible/index.js";
@@ -31,9 +36,16 @@
   } = $props();
 
   let open = $state(false);
+  let searchQuery = $state("");
 
   let filteredParams = $derived(
-    parameters.filter((e) => !HIDDEN_PARAM_RE.test(shortName(e.path))),
+    parameters
+      .filter((e) => !HIDDEN_PARAM_RE.test(shortName(e.path)))
+      .filter(
+        (e) =>
+          !searchQuery ||
+          shortName(e.path).toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
   );
 
   function shortName(path: string): string {
@@ -102,6 +114,17 @@
         <RefreshCw class="mr-1.5 size-3.5" />
         Send All Parameters
       </Button>
+    </div>
+    <div class="relative mt-1.5">
+      <Search
+        class="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+      />
+      <input
+        type="text"
+        placeholder="Search parameters..."
+        bind:value={searchQuery}
+        class="w-full rounded-md border border-border bg-transparent py-1.5 pl-7 pr-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+      />
     </div>
     <div
       class="mt-1.5 max-h-52 overflow-y-auto overflow-x-hidden rounded-md border border-border"

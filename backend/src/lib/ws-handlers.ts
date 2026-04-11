@@ -300,12 +300,14 @@ export function createSocketHandlers(registry: SocketRegistry) {
 				)
 			}
 
-			await broadcastToRoom(
-				registry,
-				result.outboundPayload.roomCode,
-				createEnvelope(SERVER_EVENT_TYPES.paramBatch, result.outboundPayload),
-				ws.data.sessionId
-			)
+			if (result.outboundPayload) {
+				await broadcastToRoom(
+					registry,
+					result.outboundPayload.roomCode,
+					createEnvelope(SERVER_EVENT_TYPES.paramBatch, result.outboundPayload),
+					ws.data.sessionId
+				)
+			}
 		} catch (error) {
 			handleDomainError(ws, error, envelope.requestId)
 		}

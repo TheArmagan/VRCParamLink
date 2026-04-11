@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Crown, Users, ChevronDown } from "@lucide/svelte";
+  import { Crown, Users, ChevronDown, Search } from "@lucide/svelte";
   import type {
     ParamEntry,
     ParamValue,
@@ -25,6 +25,7 @@
   } = $props();
 
   let expandedParticipants: Record<string, boolean> = $state({});
+  let participantSearchQuery: Record<string, string> = $state({});
 
   function shortName(path: string): string {
     const segments = path.split("/");
@@ -33,7 +34,10 @@
 
   function getFilteredParams(sessionId: string): ParamEntry[] {
     const params = participantParams[sessionId] ?? [];
-    return params.filter((e) => !HIDDEN_PARAM_RE.test(shortName(e.path)));
+    const query = (participantSearchQuery[sessionId] ?? "").toLowerCase();
+    return params
+      .filter((e) => !HIDDEN_PARAM_RE.test(shortName(e.path)))
+      .filter((e) => !query || shortName(e.path).toLowerCase().includes(query));
   }
 
   function handleBoolChange(
@@ -112,13 +116,30 @@
             />
           </Collapsible.Trigger>
           <Collapsible.Content>
-            {#if params.length === 0}
+            {@const allParams = (
+              participantParams[participant.sessionId] ?? []
+            ).filter((e) => !HIDDEN_PARAM_RE.test(shortName(e.path)))}
+            {#if allParams.length === 0}
               <p
                 class="mt-1 rounded-md border border-border px-2.5 py-2 text-center text-xs text-muted-foreground"
               >
                 No parameters yet.
               </p>
             {:else}
+              <div class="relative mt-1">
+                <Search
+                  class="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                />
+                <input
+                  type="text"
+                  placeholder="Search parameters..."
+                  value={participantSearchQuery[participant.sessionId] ?? ""}
+                  oninput={(e) =>
+                    (participantSearchQuery[participant.sessionId] =
+                      e.currentTarget.value)}
+                  class="w-full rounded-md border border-border bg-transparent py-1.5 pl-7 pr-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              </div>
               <div
                 class="mt-1 max-h-40 overflow-y-auto overflow-x-hidden rounded-md border border-border"
                 style="scroll-behavior:smooth;-webkit-overflow-scrolling:touch;"
