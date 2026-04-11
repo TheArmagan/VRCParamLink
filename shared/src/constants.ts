@@ -14,7 +14,7 @@ export const HEARTBEAT_TIMEOUT_MS = 10_000
 export const SUPPORTED_OSC_PREFIX = '/avatar'
 export const AVATAR_PARAMS_PREFIX = '/avatar/parameters/'
 export const AVATAR_CHANGE_OSC_ADDRESS = '/avatar/change'
-export const PARAM_LIST_MAX_SIZE = 200
+export const PARAM_LIST_MAX_SIZE = 250
 
 /**
  * VRChat built-in avatar parameters that should never be synced.

@@ -6,6 +6,7 @@ import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
 import { applySelfAvatarChange, getAppState, setAppVersion, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
+import { checkForUpdates } from './lib/auto-updater.ts'
 
 const oscSync = new OscSyncService({
   onLocalParamBatch: async (params, batchSeq) => {
@@ -197,6 +198,8 @@ app.whenReady().then(() => {
   oscSync.start()
   registerIpcHandlers()
   createWindow()
+
+  checkForUpdates()
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

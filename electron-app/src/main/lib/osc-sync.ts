@@ -7,6 +7,7 @@ import {
   isSupportedOscPath,
   OSC_ECHO_SUPPRESSION_MS,
   PARAM_BATCH_INTERVAL_MS,
+  RAPID_PARAM_THROTTLE_MS,
   type OutboundParamBatchPayload,
   type ParamValue
 } from '../../../../shared/src/index.ts'
@@ -25,6 +26,11 @@ type SuppressedParamRecord = {
   expiresAt: number
 }
 
+/** Time window (ms) for measuring param update frequency. */
+const RATE_WINDOW_MS = 3_000
+/** Updates within the window to classify a param as rapidly changing. */
+const RAPID_CHANGE_THRESHOLD = 8
+
 export class OscSyncService {
   private readonly osc = new OSC({
     local: {
@@ -39,7 +45,12 @@ export class OscSyncService {
 
   private readonly pendingParams = new Map<string, ParamValue>()
   private readonly suppressedParams = new Map<string, SuppressedParamRecord>()
+  /** paramPath → recent update timestamps for rate classification. */
+  private readonly paramUpdateHistory = new Map<string, number[]>()
+  /** Buffered rapid params awaiting throttled flush. Only latest value per path kept. */
+  private readonly rapidParamBuffer = new Map<string, ParamValue>()
   private flushTimer: ReturnType<typeof setInterval> | null = null
+  private rapidFlushTimer: ReturnType<typeof setInterval> | null = null
   private batchSequence = 0
   private started = false
 
@@ -62,6 +73,10 @@ export class OscSyncService {
     this.flushTimer = setInterval(() => {
       void this.flushPendingParams()
     }, PARAM_BATCH_INTERVAL_MS)
+
+    this.rapidFlushTimer = setInterval(() => {
+      void this.flushRapidParams()
+    }, RAPID_PARAM_THROTTLE_MS)
   }
 
   stop(): void {
@@ -70,8 +85,15 @@ export class OscSyncService {
       this.flushTimer = null
     }
 
+    if (this.rapidFlushTimer) {
+      clearInterval(this.rapidFlushTimer)
+      this.rapidFlushTimer = null
+    }
+
     this.pendingParams.clear()
     this.suppressedParams.clear()
+    this.paramUpdateHistory.clear()
+    this.rapidParamBuffer.clear()
     this.osc.removeAllListeners()
     this.osc.close()
     this.started = false
@@ -124,14 +146,76 @@ export class OscSyncService {
       return
     }
 
-    const params = [...this.pendingParams.values()]
+    const allParams = [...this.pendingParams.values()]
     this.pendingParams.clear()
+
+    // Record update timestamps for rate classification
+    const now = Date.now()
+    for (const param of allParams) {
+      this.recordParamUpdate(param.path, now)
+    }
+
+    // Split into stable (immediate) and rapid (buffered)
+    const stableParams: ParamValue[] = []
+    for (const param of allParams) {
+      if (this.isRapidParam(param.path, now)) {
+        this.rapidParamBuffer.set(param.path, param)
+      } else {
+        stableParams.push(param)
+      }
+    }
+
+    if (stableParams.length === 0) {
+      return
+    }
+
+    try {
+      await this.options.onLocalParamBatch(stableParams, this.batchSequence++)
+    } catch (error) {
+      this.options.onError?.(error instanceof Error ? error : new Error('OSC param batch flush failed.'))
+    }
+  }
+
+  private async flushRapidParams(): Promise<void> {
+    if (this.rapidParamBuffer.size === 0) {
+      return
+    }
+
+    const params = [...this.rapidParamBuffer.values()]
+    this.rapidParamBuffer.clear()
 
     try {
       await this.options.onLocalParamBatch(params, this.batchSequence++)
     } catch (error) {
-      this.options.onError?.(error instanceof Error ? error : new Error('OSC param batch flush failed.'))
+      this.options.onError?.(error instanceof Error ? error : new Error('OSC rapid param flush failed.'))
     }
+  }
+
+  private recordParamUpdate(path: string, now: number): void {
+    let timestamps = this.paramUpdateHistory.get(path)
+    if (!timestamps) {
+      timestamps = []
+      this.paramUpdateHistory.set(path, timestamps)
+    }
+    timestamps.push(now)
+  }
+
+  private isRapidParam(path: string, now: number): boolean {
+    const timestamps = this.paramUpdateHistory.get(path)
+    if (!timestamps) return false
+
+    const cutoff = now - RATE_WINDOW_MS
+
+    // Prune old entries
+    const firstValidIdx = timestamps.findIndex(t => t >= cutoff)
+    if (firstValidIdx > 0) {
+      timestamps.splice(0, firstValidIdx)
+    } else if (firstValidIdx === -1) {
+      this.paramUpdateHistory.delete(path)
+      return false
+    }
+
+    return timestamps.length >= RAPID_CHANGE_THRESHOLD
   }
 
   private mapOscMessageToParam(message: OSCMessage): ParamValue | null {
