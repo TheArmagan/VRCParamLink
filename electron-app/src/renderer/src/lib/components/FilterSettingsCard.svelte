@@ -11,15 +11,32 @@
     isOwner = false,
     filterMode = $bindable<FilterMode>("allow_all"),
     filterPathsText = $bindable(""),
-    onSave = (_filterMode: FilterMode, _filterPathsText: string) => {},
+    filterBlacklistPathsText = $bindable(""),
+    onSave = (
+      _filterMode: FilterMode,
+      _filterPathsText: string,
+      _filterBlacklistPathsText: string,
+    ) => {},
   }: {
     isOwner?: boolean;
     filterMode?: FilterMode;
     filterPathsText?: string;
-    onSave?: (filterMode: FilterMode, filterPathsText: string) => void;
+    filterBlacklistPathsText?: string;
+    onSave?: (
+      filterMode: FilterMode,
+      filterPathsText: string,
+      filterBlacklistPathsText: string,
+    ) => void;
   } = $props();
 
   let open = $state(false);
+
+  let showWhitelistPaths = $derived(
+    filterMode === "whitelist" || filterMode === "combined",
+  );
+  let showBlacklistPaths = $derived(
+    filterMode === "blacklist" || filterMode === "combined",
+  );
 </script>
 
 <Collapsible.Root bind:open>
@@ -46,7 +63,9 @@
               ? "Allow All"
               : filterMode === "whitelist"
                 ? "Whitelist"
-                : "Blacklist"}
+                : filterMode === "blacklist"
+                  ? "Blacklist"
+                  : "Combined"}
           </Select.Trigger>
           <Select.Content>
             <Select.Item value="allow_all" label="Allow All" disabled={false}>
@@ -58,26 +77,57 @@
             <Select.Item value="blacklist" label="Blacklist" disabled={false}>
               Blacklist
             </Select.Item>
+            <Select.Item value="combined" label="Combined" disabled={false}>
+              Combined
+            </Select.Item>
           </Select.Content>
         </Select.Root>
       </div>
 
-      <div class="grid gap-1">
-        <Label class="text-[11px] text-muted-foreground">Filter Paths</Label>
-        <Textarea
-          bind:value={filterPathsText}
-          class="min-h-16 resize-none text-xs"
-          disabled={!isOwner}
-          placeholder="/avatar/parameters/Eye*&#10;/avatar/parameters/Hand*"
-        />
-      </div>
+      {#if showWhitelistPaths}
+        <div class="grid gap-1">
+          <Label class="text-[11px] text-muted-foreground">
+            {filterMode === "combined" ? "Whitelist Paths" : "Filter Paths"}
+          </Label>
+          <Textarea
+            bind:value={filterPathsText}
+            class="min-h-16 resize-none text-xs"
+            disabled={!isOwner}
+            placeholder="/avatar/parameters/Eye*&#10;/avatar/parameters/Hand*"
+          />
+        </div>
+      {/if}
+
+      {#if showBlacklistPaths}
+        <div class="grid gap-1">
+          <Label class="text-[11px] text-muted-foreground">
+            {filterMode === "combined" ? "Blacklist Paths" : "Filter Paths"}
+          </Label>
+          {#if filterMode === "blacklist"}
+            <Textarea
+              bind:value={filterPathsText}
+              class="min-h-16 resize-none text-xs"
+              disabled={!isOwner}
+              placeholder="/avatar/parameters/VF*_TC_*&#10;/avatar/parameters/Debug*"
+            />
+          {:else}
+            <Textarea
+              bind:value={filterBlacklistPathsText}
+              class="min-h-16 resize-none text-xs"
+              disabled={!isOwner}
+              placeholder="/avatar/parameters/VF*_TC_*&#10;/avatar/parameters/Debug*"
+            />
+          {/if}
+        </div>
+      {/if}
 
       <Button
         variant="outline"
         size="sm"
         class="h-8"
         disabled={!isOwner}
-        onclick={() => onSave(filterMode, filterPathsText)}
+        onclick={() =>
+          onSave(filterMode, filterPathsText, filterBlacklistPathsText)}
       >
         <Save class="size-3.5" />
         Save Filters

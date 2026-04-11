@@ -24,6 +24,9 @@
     filterMode:
       (localStorage.getItem("vrcpl:filterMode") as FilterMode) ?? "allow_all",
     filterPaths: JSON.parse(localStorage.getItem("vrcpl:filterPaths") ?? "[]"),
+    filterBlacklistPaths: JSON.parse(
+      localStorage.getItem("vrcpl:filterBlacklistPaths") ?? "[]",
+    ),
     connectionState: "idle",
     sessionStatus: "idle",
     lastSyncAt: null,
@@ -143,6 +146,7 @@
   async function saveRoomSettings(
     filterMode: FilterMode,
     filterPathsText: string,
+    filterBlacklistPathsText: string,
     autoOwnerEnabled: boolean,
     instantOwnerTakeoverEnabled: boolean,
   ): Promise<void> {
@@ -151,9 +155,15 @@
       .map((entry) => entry.trim())
       .filter(Boolean);
 
+    const filterBlacklistPaths = filterBlacklistPathsText
+      .split(/\r?\n|,/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
     const result = await window.api.updateRoomSettings({
       filterMode,
       filterPaths,
+      filterBlacklistPaths,
       autoOwnerEnabled,
       instantOwnerTakeoverEnabled,
     });
@@ -161,6 +171,10 @@
     if (result.ok) {
       localStorage.setItem("vrcpl:filterMode", filterMode);
       localStorage.setItem("vrcpl:filterPaths", JSON.stringify(filterPaths));
+      localStorage.setItem(
+        "vrcpl:filterBlacklistPaths",
+        JSON.stringify(filterBlacklistPaths),
+      );
     }
 
     uiMessage = result.ok

@@ -126,17 +126,23 @@ export function isSetRoomSettingsPayload(payload: unknown): payload is SetRoomSe
     payload.filterMode === undefined ||
     payload.filterMode === FILTER_MODES.allowAll ||
     payload.filterMode === FILTER_MODES.whitelist ||
-    payload.filterMode === FILTER_MODES.blacklist
+    payload.filterMode === FILTER_MODES.blacklist ||
+    payload.filterMode === FILTER_MODES.combined
 
   const hasValidFilterPaths =
     payload.filterPaths === undefined ||
     (Array.isArray(payload.filterPaths) && payload.filterPaths.every((entry) => typeof entry === 'string'))
 
+  const hasValidFilterBlacklistPaths =
+    payload.filterBlacklistPaths === undefined ||
+    (Array.isArray(payload.filterBlacklistPaths) && payload.filterBlacklistPaths.every((entry) => typeof entry === 'string'))
+
   return (
     (payload.autoOwnerEnabled === undefined || typeof payload.autoOwnerEnabled === 'boolean') &&
     (payload.instantOwnerTakeoverEnabled === undefined || typeof payload.instantOwnerTakeoverEnabled === 'boolean') &&
     hasValidFilterMode &&
-    hasValidFilterPaths
+    hasValidFilterPaths &&
+    hasValidFilterBlacklistPaths
   )
 }
 

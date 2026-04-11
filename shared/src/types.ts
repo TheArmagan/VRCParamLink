@@ -28,6 +28,7 @@ export interface RoomSettings {
   instantOwnerTakeoverEnabled: boolean
   filterMode: FilterMode
   filterPaths: string[]
+  filterBlacklistPaths: string[]
 }
 
 export interface Participant {
@@ -186,6 +187,7 @@ export interface RendererAppState {
   instantOwnerTakeoverEnabled: boolean
   filterMode: FilterMode
   filterPaths: string[]
+  filterBlacklistPaths: string[]
   connectionState: ConnectionState
   sessionStatus: SessionStatus
   lastSyncAt: number | null

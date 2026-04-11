@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, setAppVersion, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, passesFilter, setAppVersion, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { checkForUpdates } from './lib/auto-updater.ts'
@@ -16,7 +16,12 @@ const oscSync = new OscSyncService({
       return
     }
 
-    const result = await backendClient.sendParamBatch(batchSeq, params)
+    const filtered = params.filter((p) => passesFilter(p.path))
+    if (filtered.length === 0) {
+      return
+    }
+
+    const result = await backendClient.sendParamBatch(batchSeq, filtered)
     if (!result.ok) {
       broadcastAppState()
     }
@@ -173,11 +178,16 @@ function registerIpcHandlers(): void {
     if (!state.roomCode || state.parameterList.length === 0) {
       return
     }
-    const params: ParamValue[] = state.parameterList.map((entry) => ({
-      path: entry.path,
-      valueType: entry.valueType,
-      value: entry.value
-    }))
+    const params: ParamValue[] = state.parameterList
+      .filter((entry) => passesFilter(entry.path))
+      .map((entry) => ({
+        path: entry.path,
+        valueType: entry.valueType,
+        value: entry.value
+      }))
+    if (params.length === 0) {
+      return
+    }
     await backendClient.sendParamBatch(0, params)
   })
 }

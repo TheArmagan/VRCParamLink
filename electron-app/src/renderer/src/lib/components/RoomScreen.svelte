@@ -27,6 +27,7 @@
     onSaveRoomSettings = (
       _filterMode: FilterMode,
       _filterPathsText: string,
+      _filterBlacklistPathsText: string,
       _autoOwnerEnabled: boolean,
       _instantOwnerTakeoverEnabled: boolean,
     ) => {},
@@ -44,6 +45,7 @@
     onSaveRoomSettings?: (
       filterMode: FilterMode,
       filterPathsText: string,
+      filterBlacklistPathsText: string,
       autoOwnerEnabled: boolean,
       instantOwnerTakeoverEnabled: boolean,
     ) => void;
@@ -58,12 +60,16 @@
 
   let filterModeDraft: FilterMode = $state(appState.filterMode);
   let filterPathsDraft = $state(appState.filterPaths.join("\n"));
+  let filterBlacklistPathsDraft = $state(
+    appState.filterBlacklistPaths.join("\n"),
+  );
   let autoOwnerDraft = $state(appState.autoOwnerEnabled);
   let instantOwnerDraft = $state(appState.instantOwnerTakeoverEnabled);
 
   // Only sync drafts when the server-side values actually change
   let lastSyncedFilterMode: FilterMode | null = $state(null);
   let lastSyncedFilterPaths: string | null = $state(null);
+  let lastSyncedFilterBlacklistPaths: string | null = $state(null);
   let lastSyncedAutoOwner: boolean | null = $state(null);
   let lastSyncedInstantOwner: boolean | null = $state(null);
 
@@ -79,6 +85,12 @@
     if (serverPaths !== lastSyncedFilterPaths) {
       filterPathsDraft = serverPaths;
       lastSyncedFilterPaths = serverPaths;
+    }
+
+    const serverBlacklistPaths = appState.filterBlacklistPaths.join("\n");
+    if (serverBlacklistPaths !== lastSyncedFilterBlacklistPaths) {
+      filterBlacklistPathsDraft = serverBlacklistPaths;
+      lastSyncedFilterBlacklistPaths = serverBlacklistPaths;
     }
 
     if (appState.autoOwnerEnabled !== lastSyncedAutoOwner) {
@@ -139,6 +151,7 @@
           onSaveRoomSettings(
             filterModeDraft,
             filterPathsDraft,
+            filterBlacklistPathsDraft,
             enabled,
             instantOwnerDraft,
           );
@@ -148,6 +161,7 @@
           onSaveRoomSettings(
             filterModeDraft,
             filterPathsDraft,
+            filterBlacklistPathsDraft,
             autoOwnerDraft,
             enabled,
           );
@@ -158,10 +172,12 @@
         {isOwner}
         bind:filterMode={filterModeDraft}
         bind:filterPathsText={filterPathsDraft}
-        onSave={(nextFilterMode, nextFilterPathsText) =>
+        bind:filterBlacklistPathsText={filterBlacklistPathsDraft}
+        onSave={(nextFilterMode, nextFilterPathsText, nextBlacklistPathsText) =>
           onSaveRoomSettings(
             nextFilterMode,
             nextFilterPathsText,
+            nextBlacklistPathsText,
             autoOwnerDraft,
             instantOwnerDraft,
           )}

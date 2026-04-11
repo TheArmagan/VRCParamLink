@@ -49,6 +49,7 @@ export class RoomManager {
       instantOwnerTakeoverEnabled: settings.instantOwnerTakeoverEnabled ? '1' : '0',
       filterMode: settings.filterMode,
       filterPaths: JSON.stringify(settings.filterPaths),
+      filterBlacklistPaths: JSON.stringify(settings.filterBlacklistPaths),
       participantCount: '1',
       ownerAvatarId: ''
     })
@@ -272,7 +273,8 @@ export class RoomManager {
       autoOwnerEnabled: roomMeta.autoOwnerEnabled === '1',
       instantOwnerTakeoverEnabled: roomMeta.instantOwnerTakeoverEnabled === '1',
       filterMode: roomMeta.filterMode as RoomSettings['filterMode'],
-      filterPaths: JSON.parse(roomMeta.filterPaths || '[]')
+      filterPaths: JSON.parse(roomMeta.filterPaths || '[]'),
+      filterBlacklistPaths: JSON.parse(roomMeta.filterBlacklistPaths || '[]')
     }
 
     const nextSettings = mergeSettings({ ...currentSettings, ...partialSettings })
@@ -281,7 +283,8 @@ export class RoomManager {
       autoOwnerEnabled: nextSettings.autoOwnerEnabled ? '1' : '0',
       instantOwnerTakeoverEnabled: nextSettings.instantOwnerTakeoverEnabled ? '1' : '0',
       filterMode: nextSettings.filterMode,
-      filterPaths: JSON.stringify(nextSettings.filterPaths)
+      filterPaths: JSON.stringify(nextSettings.filterPaths),
+      filterBlacklistPaths: JSON.stringify(nextSettings.filterBlacklistPaths)
     })
 
     return { roomCode, updatedBySessionId: sessionId, settings: nextSettings }
@@ -449,7 +452,8 @@ export class RoomManager {
       autoOwnerEnabled: roomMeta.autoOwnerEnabled === '1',
       instantOwnerTakeoverEnabled: roomMeta.instantOwnerTakeoverEnabled === '1',
       filterMode: roomMeta.filterMode as RoomSettings['filterMode'],
-      filterPaths: JSON.parse(roomMeta.filterPaths || '[]')
+      filterPaths: JSON.parse(roomMeta.filterPaths || '[]'),
+      filterBlacklistPaths: JSON.parse(roomMeta.filterBlacklistPaths || '[]')
     }
 
     return {

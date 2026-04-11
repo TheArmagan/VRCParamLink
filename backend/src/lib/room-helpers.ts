@@ -14,8 +14,9 @@ import { RoomManagerError } from './room-errors.ts'
 export function mergeSettings(partialSettings?: Partial<RoomSettings>): RoomSettings {
   const defaults = createDefaultRoomSettings()
   const filterPaths = [...new Set((partialSettings?.filterPaths ?? defaults.filterPaths).map((entry) => entry.trim()))]
+  const filterBlacklistPaths = [...new Set((partialSettings?.filterBlacklistPaths ?? defaults.filterBlacklistPaths).map((entry) => entry.trim()))]
 
-  for (const path of filterPaths) {
+  for (const path of [...filterPaths, ...filterBlacklistPaths]) {
     // Allow glob patterns (e.g. /avatar/parameters/Eye*) — only reject
     // paths that clearly don't target the /avatar namespace after stripping
     // leading glob characters.
@@ -26,7 +27,7 @@ export function mergeSettings(partialSettings?: Partial<RoomSettings>): RoomSett
   }
 
   const filterMode = partialSettings?.filterMode ?? defaults.filterMode
-  if (![FILTER_MODES.allowAll, FILTER_MODES.whitelist, FILTER_MODES.blacklist].includes(filterMode)) {
+  if (![FILTER_MODES.allowAll, FILTER_MODES.whitelist, FILTER_MODES.blacklist, FILTER_MODES.combined].includes(filterMode)) {
     throw new RoomManagerError(ERROR_CODES.invalidFilterMode, 'Invalid filter mode.')
   }
 
@@ -35,7 +36,8 @@ export function mergeSettings(partialSettings?: Partial<RoomSettings>): RoomSett
     instantOwnerTakeoverEnabled:
       partialSettings?.instantOwnerTakeoverEnabled ?? defaults.instantOwnerTakeoverEnabled,
     filterMode,
-    filterPaths
+    filterPaths,
+    filterBlacklistPaths
   }
 }
 

@@ -64,7 +64,8 @@ export const DEFAULT_BACKEND_URL = `wss://vrcpl-api.armagan.rest`
 export const FILTER_MODES = {
   allowAll: 'allow_all',
   whitelist: 'whitelist',
-  blacklist: 'blacklist'
+  blacklist: 'blacklist',
+  combined: 'combined'
 } as const
 
 export const CONNECTION_STATES = {
@@ -149,6 +150,7 @@ export function createDefaultRoomSettings() {
     autoOwnerEnabled: false,
     instantOwnerTakeoverEnabled: true,
     filterMode: FILTER_MODES.allowAll,
-    filterPaths: []
+    filterPaths: [],
+    filterBlacklistPaths: []
   }
 }

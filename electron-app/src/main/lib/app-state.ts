@@ -40,6 +40,7 @@ const state: RendererAppState = {
   instantOwnerTakeoverEnabled: defaultRoomSettings.instantOwnerTakeoverEnabled,
   filterMode: defaultRoomSettings.filterMode,
   filterPaths: [...defaultRoomSettings.filterPaths],
+  filterBlacklistPaths: [...defaultRoomSettings.filterBlacklistPaths],
   connectionState: CONNECTION_STATES.idle,
   sessionStatus: SESSION_STATUSES.idle,
   lastSyncAt: null,
@@ -121,6 +122,7 @@ export function applyRoomJoined(payload: RoomJoinedPayload): void {
   state.instantOwnerTakeoverEnabled = payload.settings.instantOwnerTakeoverEnabled
   state.filterMode = payload.settings.filterMode
   state.filterPaths = [...payload.settings.filterPaths]
+  state.filterBlacklistPaths = [...payload.settings.filterBlacklistPaths]
   state.sessionStatus = SESSION_STATUSES.inRoom
   state.lastSyncAt = payload.snapshot.length > 0 ? Date.now() : null
   state.lastSyncDirection = payload.snapshot.length > 0 ? 'incoming' : null
@@ -211,6 +213,13 @@ export function applyRoomSettingsUpdated(payload: RoomSettingsUpdatedPayload): v
   state.instantOwnerTakeoverEnabled = payload.settings.instantOwnerTakeoverEnabled
   state.filterMode = payload.settings.filterMode
   state.filterPaths = [...payload.settings.filterPaths]
+  state.filterBlacklistPaths = [...payload.settings.filterBlacklistPaths]
+
+  // Purge params that no longer pass the updated filter
+  state.parameterList = state.parameterList.filter((e) => passesFilter(e.path))
+  for (const sessionId of Object.keys(state.participantParams)) {
+    state.participantParams[sessionId] = state.participantParams[sessionId].filter((e) => passesFilter(e.path))
+  }
 }
 
 export function applyParamBatch(_payload: OutboundParamBatchPayload): void {
@@ -268,6 +277,7 @@ export function clearRoomState(): void {
   state.instantOwnerTakeoverEnabled = defaultRoomSettings.instantOwnerTakeoverEnabled
   state.filterMode = defaultRoomSettings.filterMode
   state.filterPaths = [...defaultRoomSettings.filterPaths]
+  state.filterBlacklistPaths = [...defaultRoomSettings.filterBlacklistPaths]
   state.sessionStatus = state.displayName ? SESSION_STATUSES.named : SESSION_STATUSES.idle
   state.lastSyncAt = null
   state.lastSyncDirection = null
@@ -349,31 +359,47 @@ export function shouldApplyRemoteParam(path: string): boolean {
 }
 
 function passesFilter(path: string): boolean {
-  if (state.filterMode === FILTER_MODES.allowAll || state.filterPaths.length === 0) {
+  if (state.filterMode === FILTER_MODES.allowAll) {
     return true
   }
 
-  const isMatch = picomatch(state.filterPaths)
-
   if (state.filterMode === FILTER_MODES.whitelist) {
-    return isMatch(path)
+    if (state.filterPaths.length === 0) return true
+    return picomatch(state.filterPaths, { windows: false })(path)
   }
 
-  // blacklist
-  return !isMatch(path)
+  if (state.filterMode === FILTER_MODES.blacklist) {
+    if (state.filterPaths.length === 0) return true
+    return !picomatch(state.filterPaths, { windows: false })(path)
+  }
+
+  // combined: whitelist first, then blacklist
+  let allowed = true
+  if (state.filterPaths.length > 0) {
+    allowed = picomatch(state.filterPaths, { windows: false })(path)
+  }
+  if (allowed && state.filterBlacklistPaths.length > 0) {
+    allowed = !picomatch(state.filterBlacklistPaths, { windows: false })(path)
+  }
+  return allowed
 }
+
+export { passesFilter }
 
 function updateParameterList(params: ParamValue[]): void {
   const now = Date.now()
   const entries = new Map<string, ParamEntry>()
+  const filtered = params.filter((p) => passesFilter(p.path))
 
-  // Existing entries
+  // Existing entries (re-filter in case filter changed)
   for (const entry of state.parameterList) {
-    entries.set(entry.path, entry)
+    if (passesFilter(entry.path)) {
+      entries.set(entry.path, entry)
+    }
   }
 
   // Merge new params
-  for (const param of params) {
+  for (const param of filtered) {
     const existing = entries.get(param.path)
     entries.set(param.path, {
       path: param.path,
@@ -407,12 +433,15 @@ function updateParticipantParams(sessionId: string, params: ParamValue[]): void 
   const now = Date.now()
   const existing = state.participantParams[sessionId] ?? []
   const entries = new Map<string, ParamEntry>()
+  const filtered = params.filter((p) => passesFilter(p.path))
 
   for (const entry of existing) {
-    entries.set(entry.path, entry)
+    if (passesFilter(entry.path)) {
+      entries.set(entry.path, entry)
+    }
   }
 
-  for (const param of params) {
+  for (const param of filtered) {
     entries.set(param.path, {
       path: param.path,
       valueType: param.valueType,
