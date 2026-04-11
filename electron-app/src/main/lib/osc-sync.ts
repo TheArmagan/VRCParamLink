@@ -2,6 +2,7 @@ import {
   DEFAULT_OSC_HOST,
   DEFAULT_OSC_INBOUND_PORT,
   DEFAULT_OSC_OUTBOUND_PORT,
+  isBuiltinVrcParam,
   isSupportedOscPath,
   OSC_ECHO_SUPPRESSION_MS,
   PARAM_BATCH_INTERVAL_MS,
@@ -39,7 +40,7 @@ export class OscSyncService {
   private batchSequence = 0
   private started = false
 
-  constructor(private readonly options: OscSyncOptions) {}
+  constructor(private readonly options: OscSyncOptions) { }
 
   start(): void {
     if (this.started) {
@@ -86,7 +87,7 @@ export class OscSyncService {
   }
 
   private handleOscMessage(message: OSCMessage): void {
-    if (!isSupportedOscPath(message.address)) {
+    if (!isSupportedOscPath(message.address) || isBuiltinVrcParam(message.address)) {
       return
     }
 

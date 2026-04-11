@@ -1,6 +1,7 @@
 import {
   ERROR_CODES,
   FILTER_MODES,
+  isBuiltinVrcParam,
   isSupportedOscPath,
   ROOM_CODE_CHARSET,
   ROOM_CODE_LENGTH,
@@ -40,6 +41,10 @@ export function normalizeParams(params: ParamValue[]): ParamValue[] {
   for (const param of params) {
     if (!isSupportedOscPath(param.path)) {
       throw new RoomManagerError(ERROR_CODES.invalidParamPath, `Unsupported OSC path: ${param.path}`)
+    }
+
+    if (isBuiltinVrcParam(param.path)) {
+      continue
     }
 
     if (!isSupportedValueType(param)) {

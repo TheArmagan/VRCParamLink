@@ -11,6 +11,46 @@ export const RECONNECT_GRACE_MS = 10_000
 export const HEARTBEAT_INTERVAL_MS = 5_000
 export const HEARTBEAT_TIMEOUT_MS = 10_000
 export const SUPPORTED_OSC_PREFIX = '/avatar'
+export const AVATAR_PARAMS_PREFIX = '/avatar/parameters/'
+
+/**
+ * VRChat built-in avatar parameters that should never be synced.
+ * These are player-specific (movement, tracking, etc.) and read-only.
+ * @see https://creators.vrchat.com/avatars/animator-parameters/
+ */
+export const VRC_BUILTIN_PARAMS: ReadonlySet<string> = new Set([
+  'IsLocal',
+  'PreviewMode',
+  'Viseme',
+  'Voice',
+  'GestureLeft',
+  'GestureRight',
+  'GestureLeftWeight',
+  'GestureRightWeight',
+  'AngularY',
+  'VelocityX',
+  'VelocityY',
+  'VelocityZ',
+  'VelocityMagnitude',
+  'Upright',
+  'Grounded',
+  'Seated',
+  'AFK',
+  'TrackingType',
+  'VRMode',
+  'MuteSelf',
+  'InStation',
+  'Earmuffs',
+  'IsOnFriendsList',
+  'AvatarVersion',
+  'IsAnimatorEnabled',
+  'ScaleModified',
+  'ScaleFactor',
+  'ScaleFactorInverse',
+  'EyeHeightAsMeters',
+  'EyeHeightAsPercent'
+])
+
 export const DEFAULT_OSC_HOST = '127.0.0.1'
 export const DEFAULT_OSC_INBOUND_PORT = 9001
 export const DEFAULT_OSC_OUTBOUND_PORT = 9000
@@ -88,6 +128,12 @@ export function isValidRoomCode(value: string): boolean {
 
 export function isSupportedOscPath(path: string): boolean {
   return path.startsWith(SUPPORTED_OSC_PREFIX)
+}
+
+export function isBuiltinVrcParam(path: string): boolean {
+  if (!path.startsWith(AVATAR_PARAMS_PREFIX)) return false
+  const paramName = path.slice(AVATAR_PARAMS_PREFIX.length)
+  return VRC_BUILTIN_PARAMS.has(paramName)
 }
 
 export function createDefaultRoomSettings() {
