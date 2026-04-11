@@ -15,8 +15,8 @@ export const DEFAULT_OSC_HOST = '127.0.0.1'
 export const DEFAULT_OSC_INBOUND_PORT = 9001
 export const DEFAULT_OSC_OUTBOUND_PORT = 9000
 export const OSC_ECHO_SUPPRESSION_MS = 800
-export const DEFAULT_BACKEND_PORT = 30_01
-export const DEFAULT_BACKEND_URL = `ws://127.0.0.1:${DEFAULT_BACKEND_PORT}`
+export const DEFAULT_BACKEND_PORT = 3038
+export const DEFAULT_BACKEND_URL = `wss://vrcpl-api.armagan.rest`
 
 export const FILTER_MODES = {
   allowAll: 'allow_all',
