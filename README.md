@@ -16,6 +16,10 @@
 	<a href="https://github.com/TheArmagan/VRCParamLink/releases"><strong>Download the latest release ♡</strong></a>
 </p>
 
+<p align="center">
+	<a href="https://discord.gg/spfmB7S78n"><strong>Join the Discord server ✨</strong></a>
+</p>
+
 ## What Does It Do? 🌸
 
 VRCParamLink lets one person become the sync source in a room so their avatar parameters can be mirrored to the other person.
