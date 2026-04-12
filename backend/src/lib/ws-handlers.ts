@@ -7,6 +7,7 @@ import {
 	RECONNECT_GRACE_MS,
 	SERVER_EVENT_TYPES,
 	type HelloAckPayload,
+	type OutboundTrackingBatchPayload,
 	type ParticipantJoinedPayload
 } from '../../../shared/src/index.ts'
 import {
@@ -21,6 +22,7 @@ import {
 	isRemoteParamEditPayload,
 	isSetDisplayNamePayload,
 	isSetRoomSettingsPayload,
+	isTrackingBatchPayload,
 	parseSocketEnvelope
 } from './protocol.ts'
 import { broadcastToRoom, handleDomainError, sendEnvelope, sendError } from './ws-messaging.ts'
@@ -61,6 +63,9 @@ export function createSocketHandlers(registry: SocketRegistry) {
 				break
 			case CLIENT_EVENT_TYPES.remoteParamEdit:
 				await handleRemoteParamEdit(ws, envelope)
+				break
+			case CLIENT_EVENT_TYPES.trackingBatch:
+				await handleTrackingBatch(ws, envelope)
 				break
 			case CLIENT_EVENT_TYPES.heartbeat:
 				handleHeartbeat(ws, envelope)
@@ -375,5 +380,31 @@ export function createSocketHandlers(registry: SocketRegistry) {
 		} catch (error) {
 			handleDomainError(ws, error, envelope.requestId)
 		}
+	}
+
+	async function handleTrackingBatch(ws: ServerWebSocket<ConnectionContext>, envelope: ParsedSocketEnvelope): Promise<void> {
+		if (!isTrackingBatchPayload(envelope.payload)) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'Invalid tracking_batch payload.', envelope.requestId)
+			return
+		}
+
+		if (!ws.data.sessionId || !ws.data.roomCode) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'No active session or room found.', envelope.requestId)
+			return
+		}
+
+		const outbound: OutboundTrackingBatchPayload = {
+			roomCode: ws.data.roomCode,
+			sourceSessionId: ws.data.sessionId,
+			ts: envelope.payload.ts,
+			trackers: envelope.payload.trackers
+		}
+
+		await broadcastToRoom(
+			registry,
+			ws.data.roomCode,
+			createEnvelope(SERVER_EVENT_TYPES.trackingBatch, outbound),
+			ws.data.sessionId
+		)
 	}
 }

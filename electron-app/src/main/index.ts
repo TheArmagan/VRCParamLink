@@ -3,10 +3,24 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
+import { TrackerBridge } from './lib/tracker-bridge.ts'
 import { checkForUpdates } from './lib/auto-updater.ts'
+
+const trackerBridge = new TrackerBridge({
+  onBatch: (batch) => {
+    if (!isTrackingSendEnabled()) return
+    backendClient.sendTrackingBatch(batch)
+  },
+  onError: (error) => {
+    console.error('[tracker-bridge]', error)
+  },
+  onExit: (code) => {
+    console.log('[tracker-bridge] exited with code', code)
+  }
+})
 
 const oscSync = new OscSyncService({
   onLocalParamBatch: async (params, batchSeq) => {
@@ -43,6 +57,16 @@ const oscSync = new OscSyncService({
     backendClient.sendAvatarChange(avatarId)
     broadcastAppState()
   },
+  onVRTrackingDetected: () => {
+    if (!isTrackingSendEnabled()) return
+    if (!trackerBridge.isRunning) {
+      trackerBridge.spawn()
+    }
+    trackerBridge.startTracking()
+  },
+  onVRTrackingLost: () => {
+    trackerBridge.stopTracking()
+  },
   onError: (error) => {
     console.error('[osc] sync error', error)
   }
@@ -62,6 +86,10 @@ const backendClient = new BackendClient({
         oscSync.sendSingleParam(param)
       }
     }
+  },
+  onRemoteTrackingBatch: (payload) => {
+    if (!isTrackingReceiveEnabled()) return
+    oscSync.sendTrackingToVRChat(payload.trackers)
   },
   onRoomSnapshot: (snapshot) => {
     oscSync.applySnapshot(snapshot)
@@ -177,6 +205,23 @@ function registerIpcHandlers(): void {
     broadcastAppState()
   })
 
+  ipcMain.handle(IPC_CHANNELS.toggleTrackingSend, async (_event, enabled: boolean) => {
+    setTrackingSendEnabled(enabled)
+    if (enabled) {
+      if (!trackerBridge.isRunning) {
+        trackerBridge.spawn()
+      }
+    } else {
+      trackerBridge.stopTracking()
+    }
+    broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.toggleTrackingReceive, async (_event, enabled: boolean) => {
+    setTrackingReceiveEnabled(enabled)
+    broadcastAppState()
+  })
+
   ipcMain.handle(IPC_CHANNELS.editParam, async (_event, targetSessionId: string, param: ParamValue) => {
     const state = getAppState()
     if (targetSessionId === state.selfSessionId && state.localPlaybackEnabled) {
@@ -240,6 +285,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   oscSync.stop()
+  trackerBridge.destroy()
   if (process.platform !== 'darwin') {
     app.quit()
   }

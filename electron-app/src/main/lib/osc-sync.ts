@@ -1,5 +1,6 @@
 import {
   AVATAR_CHANGE_OSC_ADDRESS,
+  AVATAR_PARAMS_PREFIX,
   DEFAULT_OSC_HOST,
   DEFAULT_OSC_INBOUND_PORT,
   DEFAULT_OSC_OUTBOUND_PORT,
@@ -10,7 +11,8 @@ import {
   PARAM_BATCH_INTERVAL_MS,
   RAPID_PARAM_THROTTLE_MS,
   type OutboundParamBatchPayload,
-  type ParamValue
+  type ParamValue,
+  type TrackerEntry
 } from '../../../../shared/src/index.ts'
 import { shouldApplyRemoteParam } from './app-state.ts'
 import { OSC, type OSCArg, type OSCMessage } from './OSC.ts'
@@ -21,6 +23,8 @@ type OscSyncOptions = {
   isInputSendEnabled?: () => boolean
   isInputReceiveEnabled?: () => boolean
   onAvatarChange?: (avatarId: string) => void
+  onVRTrackingDetected?: () => void
+  onVRTrackingLost?: () => void
   onError?: (error: Error) => void
 }
 
@@ -48,6 +52,11 @@ const VELOCITY_Y_ADDRESS = '/avatar/parameters/VelocityY'
 /** VelocityY above this threshold emits /input/Jump 1; below emits 0. */
 const JUMP_VELOCITY_THRESHOLD = 0.65
 
+const VRMODE_ADDRESS = `${AVATAR_PARAMS_PREFIX}VRMode`
+const TRACKING_TYPE_ADDRESS = `${AVATAR_PARAMS_PREFIX}TrackingType`
+/** Time window (ms) in which both VRMode=1 and TrackingType>0 must arrive to trigger detection. */
+const VR_TRACKING_DETECT_WINDOW_MS = 50
+
 export class OscSyncService {
   private readonly osc = new OSC({
     local: {
@@ -72,6 +81,12 @@ export class OscSyncService {
   private started = false
   /** Tracks whether /input/Jump is currently held (to avoid duplicate sends). */
   private jumpPressed = false
+  /** Last time VRMode=1 was received (ms). */
+  private vrModeTimestamp = 0
+  /** Last time TrackingType>0 was received (ms). */
+  private trackingTypeTimestamp = 0
+  /** Whether VR tracking has been detected and callback fired. */
+  private vrTrackingActive = false
 
   constructor(private readonly options: OscSyncOptions) { }
 
@@ -145,12 +160,57 @@ export class OscSyncService {
     this.sendParamToOsc(param)
   }
 
+  sendTrackingToVRChat(trackers: TrackerEntry[]): void {
+    for (const tracker of trackers) {
+      this.osc.send({
+        address: `${tracker.address}/position`,
+        args: [
+          { type: 'f', value: tracker.position[0] },
+          { type: 'f', value: tracker.position[1] },
+          { type: 'f', value: tracker.position[2] }
+        ]
+      })
+      this.osc.send({
+        address: `${tracker.address}/rotation`,
+        args: [
+          { type: 'f', value: tracker.rotation[0] },
+          { type: 'f', value: tracker.rotation[1] },
+          { type: 'f', value: tracker.rotation[2] }
+        ]
+      })
+    }
+  }
+
   private handleOscMessage(message: OSCMessage): void {
     // Handle avatar change separately
     if (message.address === AVATAR_CHANGE_OSC_ADDRESS) {
       const avatarArg = message.args[0]
       if (avatarArg && avatarArg.type === 's' && typeof avatarArg.value === 'string') {
         this.options.onAvatarChange?.(avatarArg.value)
+      }
+      return
+    }
+
+    // VRMode / TrackingType detection (before builtin filter)
+    if (message.address === VRMODE_ADDRESS) {
+      const arg = message.args[0]
+      if (arg && arg.type === 'i' && typeof arg.value === 'number') {
+        if (arg.value === 1) {
+          this.vrModeTimestamp = Date.now()
+          this.checkVRTrackingWindow()
+        } else if (arg.value === 0 && this.vrTrackingActive) {
+          this.vrTrackingActive = false
+          this.options.onVRTrackingLost?.()
+        }
+      }
+      return
+    }
+
+    if (message.address === TRACKING_TYPE_ADDRESS) {
+      const arg = message.args[0]
+      if (arg && arg.type === 'i' && typeof arg.value === 'number' && arg.value > 0) {
+        this.trackingTypeTimestamp = Date.now()
+        this.checkVRTrackingWindow()
       }
       return
     }
@@ -357,6 +417,21 @@ export class OscSyncService {
       value: param.value,
       expiresAt: Date.now() + OSC_ECHO_SUPPRESSION_MS
     })
+  }
+
+  private checkVRTrackingWindow(): void {
+    if (this.vrTrackingActive) {
+      return
+    }
+
+    if (
+      this.vrModeTimestamp > 0 &&
+      this.trackingTypeTimestamp > 0 &&
+      Math.abs(this.vrModeTimestamp - this.trackingTypeTimestamp) < VR_TRACKING_DETECT_WINDOW_MS
+    ) {
+      this.vrTrackingActive = true
+      this.options.onVRTrackingDetected?.()
+    }
   }
 
   private shouldSuppressLocalEcho(param: ParamValue): boolean {

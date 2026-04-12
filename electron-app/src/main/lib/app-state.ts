@@ -59,7 +59,9 @@ const state: RendererAppState = {
   localPlaybackEnabled: true,
   participantParams: {},
   inputSendEnabled: false,
-  inputReceiveEnabled: false
+  inputReceiveEnabled: false,
+  trackingSendEnabled: false,
+  trackingReceiveEnabled: false
 }
 
 const syncToggles = new Map<string, boolean>()
@@ -362,6 +364,22 @@ export function setInputReceiveEnabled(enabled: boolean): void {
 
 export function isInputReceiveEnabled(): boolean {
   return state.inputReceiveEnabled
+}
+
+export function setTrackingSendEnabled(enabled: boolean): void {
+  state.trackingSendEnabled = enabled
+}
+
+export function isTrackingSendEnabled(): boolean {
+  return state.trackingSendEnabled
+}
+
+export function setTrackingReceiveEnabled(enabled: boolean): void {
+  state.trackingReceiveEnabled = enabled
+}
+
+export function isTrackingReceiveEnabled(): boolean {
+  return state.trackingReceiveEnabled
 }
 
 export function isParamSyncEnabled(path: string): boolean {

@@ -170,6 +170,24 @@ export interface OutboundRemoteParamEditPayload {
   params: ParamValue[]
 }
 
+export interface TrackerEntry {
+  address: string
+  position: [number, number, number]
+  rotation: [number, number, number]
+}
+
+export interface TrackingBatchPayload {
+  ts: number
+  trackers: TrackerEntry[]
+}
+
+export interface OutboundTrackingBatchPayload {
+  roomCode: string
+  sourceSessionId: string
+  ts: number
+  trackers: TrackerEntry[]
+}
+
 export interface ErrorPayload extends ErrorState {
   requestId?: string
 }
@@ -206,6 +224,8 @@ export interface RendererAppState {
   participantParams: Record<string, ParamEntry[]>
   inputSendEnabled: boolean
   inputReceiveEnabled: boolean
+  trackingSendEnabled: boolean
+  trackingReceiveEnabled: boolean
 }
 
 export type AppActionResult =
@@ -227,6 +247,8 @@ export interface DesktopApi {
   toggleLocalPlayback: (enabled: boolean) => Promise<void>
   toggleInputSend: (enabled: boolean) => Promise<void>
   toggleInputReceive: (enabled: boolean) => Promise<void>
+  toggleTrackingSend: (enabled: boolean) => Promise<void>
+  toggleTrackingReceive: (enabled: boolean) => Promise<void>
   editParam: (targetSessionId: string, param: ParamValue) => Promise<void>
   sendRemoteParamEdit: (targetSessionId: string, params: ParamValue[]) => Promise<void>
   sendAllParams: () => Promise<void>
@@ -244,6 +266,7 @@ export type ClientToServerMessage =
   | SocketEnvelope<HeartbeatPayload>
   | SocketEnvelope<AvatarChangePayload>
   | SocketEnvelope<RemoteParamEditPayload>
+  | SocketEnvelope<TrackingBatchPayload>
 
 export type ServerToClientMessage =
   | SocketEnvelope<HelloAckPayload>
@@ -257,6 +280,7 @@ export type ServerToClientMessage =
   | SocketEnvelope<OutboundParamBatchPayload>
   | SocketEnvelope<AvatarIdUpdatedPayload>
   | SocketEnvelope<OutboundRemoteParamEditPayload>
+  | SocketEnvelope<OutboundTrackingBatchPayload>
   | SocketEnvelope<ErrorPayload>
 
 export type TypedClientEvent = ClientEventType

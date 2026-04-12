@@ -6,6 +6,7 @@
   } from "../../../../../../shared/src/index.ts";
   import FilterSettingsCard from "./FilterSettingsCard.svelte";
   import InputSyncSettingsCard from "./InputSyncSettingsCard.svelte";
+  import TrackingSyncSettingsCard from "./TrackingSyncSettingsCard.svelte";
   import OwnerControlsCard from "./OwnerControlsCard.svelte";
   import ParameterListCard from "./ParameterListCard.svelte";
   import ParticipantsCard from "./ParticipantsCard.svelte";
@@ -25,6 +26,8 @@
     onToggleLocalPlayback = (_enabled: boolean) => {},
     onToggleInputSend = (_enabled: boolean) => {},
     onToggleInputReceive = (_enabled: boolean) => {},
+    onToggleTrackingSend = (_enabled: boolean) => {},
+    onToggleTrackingReceive = (_enabled: boolean) => {},
     onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
     onSendAllParams = () => {},
     onSaveRoomSettings = (
@@ -45,6 +48,8 @@
     onToggleLocalPlayback?: (enabled: boolean) => void;
     onToggleInputSend?: (enabled: boolean) => void;
     onToggleInputReceive?: (enabled: boolean) => void;
+    onToggleTrackingSend?: (enabled: boolean) => void;
+    onToggleTrackingReceive?: (enabled: boolean) => void;
     onEditParam?: (targetSessionId: string, param: ParamValue) => void;
     onSendAllParams?: () => void;
     onSaveRoomSettings?: (
@@ -193,6 +198,13 @@
         inputReceiveEnabled={appState.inputReceiveEnabled}
         {onToggleInputSend}
         {onToggleInputReceive}
+      />
+
+      <TrackingSyncSettingsCard
+        trackingSendEnabled={appState.trackingSendEnabled}
+        trackingReceiveEnabled={appState.trackingReceiveEnabled}
+        {onToggleTrackingSend}
+        {onToggleTrackingReceive}
       />
     </Card.Content>
   </Card.Root>

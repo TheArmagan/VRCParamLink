@@ -9,7 +9,8 @@ export const CLIENT_EVENT_TYPES = {
   paramBatch: 'param_batch',
   heartbeat: 'heartbeat',
   avatarChange: 'avatar_change',
-  remoteParamEdit: 'remote_param_edit'
+  remoteParamEdit: 'remote_param_edit',
+  trackingBatch: 'tracking_batch'
 } as const
 
 export const SERVER_EVENT_TYPES = {
@@ -24,6 +25,7 @@ export const SERVER_EVENT_TYPES = {
   paramBatch: 'param_batch',
   avatarIdUpdated: 'avatar_id_updated',
   remoteParamEdit: 'remote_param_edit',
+  trackingBatch: 'tracking_batch',
   error: 'error'
 } as const
 

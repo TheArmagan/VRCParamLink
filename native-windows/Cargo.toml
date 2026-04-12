@@ -1,0 +1,16 @@
+[package]
+name = "vrcpl-tracker-bridge"
+version = "0.1.0"
+edition = "2021"
+description = "OpenVR tracker bridge for VRCParamLink – reads SteamVR device poses and outputs VRChat OSC-compatible JSON batches"
+
+[dependencies]
+openvr = "0.8.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sysinfo = "0.33"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

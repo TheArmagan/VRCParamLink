@@ -48,6 +48,12 @@ const api: DesktopApi = {
   toggleInputReceive: async (enabled: boolean) => {
     await ipcRenderer.invoke(IPC_CHANNELS.toggleInputReceive, enabled)
   },
+  toggleTrackingSend: async (enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleTrackingSend, enabled)
+  },
+  toggleTrackingReceive: async (enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleTrackingReceive, enabled)
+  },
   editParam: async (targetSessionId: string, param: ParamValue) => {
     await ipcRenderer.invoke(IPC_CHANNELS.editParam, targetSessionId, param)
   },

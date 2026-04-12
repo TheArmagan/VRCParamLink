@@ -10,7 +10,8 @@ import {
   type RemoteParamEditPayload,
   type SetDisplayNamePayload,
   type SetRoomSettingsPayload,
-  type SocketEnvelope
+  type SocketEnvelope,
+  type TrackingBatchPayload
 } from '../../../shared/src/index.ts'
 
 type JsonRecord = Record<string, unknown>
@@ -189,5 +190,29 @@ export function isRemoteParamEditPayload(payload: unknown): payload is RemotePar
       ((entry.valueType === 'int' || entry.valueType === 'float') && typeof entry.value === 'number')
 
     return typeof entry.path === 'string' && hasValidValueType && hasValidValue
+  })
+}
+
+export function isTrackingBatchPayload(payload: unknown): payload is TrackingBatchPayload {
+  if (!isPlainObject(payload) || typeof payload.ts !== 'number' || !Array.isArray(payload.trackers)) {
+    return false
+  }
+
+  return payload.trackers.every((entry) => {
+    if (!isPlainObject(entry)) {
+      return false
+    }
+
+    const hasValidAddress = typeof entry.address === 'string'
+    const hasValidPosition =
+      Array.isArray(entry.position) &&
+      entry.position.length === 3 &&
+      entry.position.every((v: unknown) => typeof v === 'number')
+    const hasValidRotation =
+      Array.isArray(entry.rotation) &&
+      entry.rotation.length === 3 &&
+      entry.rotation.every((v: unknown) => typeof v === 'number')
+
+    return hasValidAddress && hasValidPosition && hasValidRotation
   })
 }

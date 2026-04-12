@@ -45,6 +45,8 @@
     participantParams: {},
     inputSendEnabled: false,
     inputReceiveEnabled: false,
+    trackingSendEnabled: false,
+    trackingReceiveEnabled: false,
   });
 
   let displayNameDraft = $state("");
@@ -205,6 +207,14 @@
     await window.api.toggleInputReceive(enabled);
   }
 
+  async function toggleTrackingSend(enabled: boolean): Promise<void> {
+    await window.api.toggleTrackingSend(enabled);
+  }
+
+  async function toggleTrackingReceive(enabled: boolean): Promise<void> {
+    await window.api.toggleTrackingReceive(enabled);
+  }
+
   async function editParam(
     targetSessionId: string,
     param: ParamValue,
@@ -244,6 +254,8 @@
         onToggleLocalPlayback={toggleLocalPlayback}
         onToggleInputSend={toggleInputSend}
         onToggleInputReceive={toggleInputReceive}
+        onToggleTrackingSend={toggleTrackingSend}
+        onToggleTrackingReceive={toggleTrackingReceive}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

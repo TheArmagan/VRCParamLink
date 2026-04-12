@@ -12,6 +12,7 @@ import {
   type ErrorPayload,
   type HelloAckPayload,
   type OutboundRemoteParamEditPayload,
+  type OutboundTrackingBatchPayload,
   type OwnerChangedPayload,
   type OutboundParamBatchPayload,
   type ParamValue,
@@ -21,7 +22,8 @@ import {
   type RoomSettings,
   type RoomSettingsUpdatedPayload,
   type ServerToClientMessage,
-  type SocketEnvelope
+  type SocketEnvelope,
+  type TrackingBatchPayload
 } from '../../../../shared/src/index.ts'
 import {
   applyAvatarIdUpdated,
@@ -50,6 +52,7 @@ type BackendClientOptions = {
   notifyStateChanged: () => void
   onRemoteParamBatch?: (payload: OutboundParamBatchPayload) => void
   onRemoteParamEdit?: (payload: OutboundRemoteParamEditPayload) => void
+  onRemoteTrackingBatch?: (payload: OutboundTrackingBatchPayload) => void
   onRoomSnapshot?: (snapshot: ParamValue[]) => void
 }
 
@@ -137,6 +140,19 @@ export class BackendClient {
     }
 
     this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.remoteParamEdit, { targetSessionId, params })))
+  }
+
+  sendTrackingBatch(batch: TrackingBatchPayload): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    const state = getAppState()
+    if (!state.roomCode) {
+      return
+    }
+
+    this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.trackingBatch, batch)))
   }
 
   async ensureConnected(displayName: string): Promise<AppActionResult> {
@@ -286,6 +302,9 @@ export class BackendClient {
         this.options.onRemoteParamEdit?.(remoteEditPayload)
         break
       }
+      case SERVER_EVENT_TYPES.trackingBatch:
+        this.options.onRemoteTrackingBatch?.(envelope.payload as OutboundTrackingBatchPayload)
+        break
       case SERVER_EVENT_TYPES.error:
         setErrorState(envelope.payload as ErrorPayload)
         break
