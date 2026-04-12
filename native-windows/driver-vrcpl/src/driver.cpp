@@ -269,10 +269,10 @@ private:
     {
       HANDLE pipe = CreateNamedPipeA(
           PIPE_NAME,
-          PIPE_ACCESS_INBOUND,
+          PIPE_ACCESS_DUPLEX,
           PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
           1,    // single instance
-          0,    // out buffer
+          4096, // out buffer
           4096, // in buffer
           0,    // default timeout
           nullptr);
@@ -355,6 +355,7 @@ private:
           m_devices[slot]->UpdatePose(v[0], v[1], v[2],
                                       v[3], v[4], v[5]);
         }
+        DriverLog("[vrcpl] Pose update: %d trackers\n", (int)count);
       }
       else if (msgType == MSG_RESET_ALL)
       {

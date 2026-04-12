@@ -95,6 +95,7 @@ const backendClient = new BackendClient({
   },
   onRemoteTrackingBatch: (payload) => {
     if (!isTrackingReceiveEnabled()) return
+    console.log('[tracking-recv] batch received:', payload.trackers.length, 'trackers, pipe connected:', pipeClient.isConnected)
     pipeClient.sendTrackers(payload.trackers)
   },
   onRoomSnapshot: (snapshot) => {
