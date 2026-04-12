@@ -260,11 +260,17 @@ export function applyLocalParamBatch(paramCount: number, params?: ParamValue[]):
   state.sentBatchCount += 1
 
   if (params && params.length > 0) {
-    updateParameterList(params)
-    if (state.selfSessionId) {
-      updateParticipantParams(state.selfSessionId, params)
+    // Filter out /input params — they are transient control inputs, not tracked in state
+    const avatarParams = params.filter((p) => !isInputOscPath(p.path))
+    if (avatarParams.length > 0) {
+      updateParameterList(avatarParams)
+      if (state.selfSessionId) {
+        updateParticipantParams(state.selfSessionId, avatarParams)
+      }
+      state.lastSyncParamName = extractShortParamName(avatarParams[0].path)
+    } else {
+      state.lastSyncParamName = extractShortParamName(params[0].path)
     }
-    state.lastSyncParamName = extractShortParamName(params[0].path)
   }
 }
 
