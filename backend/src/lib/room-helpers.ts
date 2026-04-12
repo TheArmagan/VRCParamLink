@@ -2,6 +2,7 @@ import {
   ERROR_CODES,
   FILTER_MODES,
   isBuiltinVrcParam,
+  isInputOscPath,
   isSupportedOscPath,
   ROOM_CODE_CHARSET,
   ROOM_CODE_LENGTH,
@@ -49,7 +50,8 @@ export function normalizeParams(params: ParamValue[]): ParamValue[] {
       throw new RoomManagerError(ERROR_CODES.invalidParamPath, `Unsupported OSC path: ${param.path}`)
     }
 
-    if (isBuiltinVrcParam(param.path)) {
+    // Skip builtin VRC params only for /avatar paths (not /input)
+    if (!isInputOscPath(param.path) && isBuiltinVrcParam(param.path)) {
       continue
     }
 

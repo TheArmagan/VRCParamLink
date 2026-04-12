@@ -42,6 +42,12 @@ const api: DesktopApi = {
   toggleLocalPlayback: async (enabled: boolean) => {
     await ipcRenderer.invoke(IPC_CHANNELS.toggleLocalPlayback, enabled)
   },
+  toggleInputSend: async (enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleInputSend, enabled)
+  },
+  toggleInputSync: async (path: string, enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleInputSync, path, enabled)
+  },
   editParam: async (targetSessionId: string, param: ParamValue) => {
     await ipcRenderer.invoke(IPC_CHANNELS.editParam, targetSessionId, param)
   },

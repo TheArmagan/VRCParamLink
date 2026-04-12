@@ -12,9 +12,49 @@ export const RECONNECT_GRACE_MS = 10_000
 export const HEARTBEAT_INTERVAL_MS = 5_000
 export const HEARTBEAT_TIMEOUT_MS = 10_000
 export const SUPPORTED_OSC_PREFIX = '/avatar'
+export const INPUT_OSC_PREFIX = '/input/'
 export const AVATAR_PARAMS_PREFIX = '/avatar/parameters/'
 export const AVATAR_CHANGE_OSC_ADDRESS = '/avatar/change'
 export const PARAM_LIST_MAX_SIZE = 250
+
+/** All supported VRChat /input axes (float, -1 to 1) */
+export const VRC_INPUT_AXES: readonly string[] = [
+  '/input/Vertical',
+  '/input/Horizontal',
+  '/input/LookHorizontal',
+  '/input/UseAxisRight',
+  '/input/GrabAxisRight',
+  '/input/MoveHoldFB',
+  '/input/SpinHoldCwCcw',
+  '/input/SpinHoldUD',
+  '/input/SpinHoldLR'
+] as const
+
+/** All supported VRChat /input buttons (int, 1 = pressed, 0 = released) */
+export const VRC_INPUT_BUTTONS: readonly string[] = [
+  '/input/MoveForward',
+  '/input/MoveBackward',
+  '/input/MoveLeft',
+  '/input/MoveRight',
+  '/input/LookLeft',
+  '/input/LookRight',
+  '/input/Jump',
+  '/input/Run',
+  '/input/ComfortLeft',
+  '/input/ComfortRight',
+  '/input/DropRight',
+  '/input/UseRight',
+  '/input/GrabRight',
+  '/input/DropLeft',
+  '/input/UseLeft',
+  '/input/GrabLeft',
+  '/input/PanicButton',
+  '/input/QuickMenuToggleLeft',
+  '/input/QuickMenuToggleRight',
+  '/input/Voice'
+] as const
+
+export const VRC_ALL_INPUTS: readonly string[] = [...VRC_INPUT_AXES, ...VRC_INPUT_BUTTONS] as const
 
 /**
  * VRChat built-in avatar parameters that should never be synced.
@@ -51,7 +91,9 @@ export const VRC_BUILTIN_PARAMS: ReadonlySet<string> = new Set([
   'ScaleFactor',
   'ScaleFactorInverse',
   'EyeHeightAsMeters',
-  'EyeHeightAsPercent'
+  'EyeHeightAsPercent',
+  'Jump',
+  'Mirror'
 ])
 
 export const DEFAULT_OSC_HOST = '127.0.0.1'
@@ -120,6 +162,8 @@ export const IPC_CHANNELS = {
   stateChanged: 'app:state-changed',
   toggleParamSync: 'app:toggle-param-sync',
   toggleLocalPlayback: 'app:toggle-local-playback',
+  toggleInputSend: 'app:toggle-input-send',
+  toggleInputSync: 'app:toggle-input-sync',
   editParam: 'app:edit-param',
   sendRemoteParamEdit: 'app:send-remote-param-edit',
   sendAllParams: 'app:send-all-params'
@@ -136,7 +180,11 @@ export function isValidRoomCode(value: string): boolean {
 }
 
 export function isSupportedOscPath(path: string): boolean {
-  return path.startsWith(SUPPORTED_OSC_PREFIX)
+  return path.startsWith(SUPPORTED_OSC_PREFIX) || path.startsWith(INPUT_OSC_PREFIX)
+}
+
+export function isInputOscPath(path: string): boolean {
+  return path.startsWith(INPUT_OSC_PREFIX)
 }
 
 export function isBuiltinVrcParam(path: string): boolean {

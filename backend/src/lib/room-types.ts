@@ -9,6 +9,8 @@ export type HandleParamBatchResult = {
   /** Immediate outbound batch (stable params only). Null if all params were throttled. */
   outboundPayload: OutboundParamBatchPayload | null
   ownerChangedPayload?: OwnerChangedPayload
+  /** Separate outbound batch for /input params (throttle bypass). */
+  inputOutboundPayload?: OutboundParamBatchPayload | null
 }
 
 export type ThrottledFlushEntry = {

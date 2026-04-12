@@ -1,5 +1,6 @@
 import {
   ERROR_CODES,
+  isInputOscPath,
   isValidRoomCode,
   normalizeRoomCode,
   ROOM_MAX_PARTICIPANTS,
@@ -304,36 +305,71 @@ export class RoomManager {
       throw new RoomManagerError(ERROR_CODES.roomNotFound, 'Room not found.')
     }
 
-    const paramPaths = normalizedParams.map(p => p.path)
+    // Split into /input and /avatar params
+    const inputParams: ParamValue[] = []
+    const avatarParams: ParamValue[] = []
 
-    // Record param updates for rate tracking
-    this.paramRateTracker.recordUpdates(roomCode, paramPaths)
-
-    // Always persist all params in Redis immediately (state is always fresh)
-    const stateUpdates: Record<string, string> = {}
     for (const param of normalizedParams) {
-      stateUpdates[param.path] = JSON.stringify(param)
-    }
-    await this.redis.hSet(redisKeys.state(roomCode), stateUpdates)
-
-    // Split params: stable → broadcast immediately, rapid → buffer for throttled flush
-    const stableParams = normalizedParams.filter(p => !this.paramRateTracker.isRapidParam(roomCode, p.path))
-    const rapidParams = normalizedParams.filter(p => this.paramRateTracker.isRapidParam(roomCode, p.path))
-
-    if (rapidParams.length > 0) {
-      this.paramThrottleBuffer.add(roomCode, sessionId, rapidParams)
+      if (isInputOscPath(param.path)) {
+        inputParams.push(param)
+      } else {
+        avatarParams.push(param)
+      }
     }
 
-    return {
-      outboundPayload: stableParams.length > 0
-        ? {
-          roomCode,
-          sourceSessionId: sessionId,
-          batchSeq: payload.batchSeq,
-          params: stableParams
-        }
-        : null
+    let result: HandleParamBatchResult | null = null
+
+    // Avatar params — existing adaptive throttle flow
+    if (avatarParams.length > 0) {
+      const paramPaths = avatarParams.map(p => p.path)
+
+      // Record param updates for rate tracking (only avatar params)
+      this.paramRateTracker.recordUpdates(roomCode, paramPaths)
+
+      // Persist avatar params in Redis
+      const stateUpdates: Record<string, string> = {}
+      for (const param of avatarParams) {
+        stateUpdates[param.path] = JSON.stringify(param)
+      }
+      await this.redis.hSet(redisKeys.state(roomCode), stateUpdates)
+
+      // Split params: stable → broadcast immediately, rapid → buffer for throttled flush
+      const stableParams = avatarParams.filter(p => !this.paramRateTracker.isRapidParam(roomCode, p.path))
+      const rapidParams = avatarParams.filter(p => this.paramRateTracker.isRapidParam(roomCode, p.path))
+
+      if (rapidParams.length > 0) {
+        this.paramThrottleBuffer.add(roomCode, sessionId, rapidParams)
+      }
+
+      result = {
+        outboundPayload: stableParams.length > 0
+          ? {
+            roomCode,
+            sourceSessionId: sessionId,
+            batchSeq: payload.batchSeq,
+            params: stableParams
+          }
+          : null
+      }
     }
+
+    // Input params — instant broadcast, no throttle, no state persistence
+    if (inputParams.length > 0) {
+      const inputOutbound = {
+        roomCode,
+        sourceSessionId: sessionId,
+        batchSeq: payload.batchSeq,
+        params: inputParams
+      }
+
+      if (!result) {
+        result = { outboundPayload: null, inputOutboundPayload: inputOutbound }
+      } else {
+        result.inputOutboundPayload = inputOutbound
+      }
+    }
+
+    return result
   }
 
   /** Drain all buffered rapid params for throttled broadcast. */

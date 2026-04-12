@@ -308,6 +308,15 @@ export function createSocketHandlers(registry: SocketRegistry) {
 					ws.data.sessionId
 				)
 			}
+
+			if (result.inputOutboundPayload) {
+				await broadcastToRoom(
+					registry,
+					result.inputOutboundPayload.roomCode,
+					createEnvelope(SERVER_EVENT_TYPES.paramBatch, result.inputOutboundPayload),
+					ws.data.sessionId
+				)
+			}
 		} catch (error) {
 			handleDomainError(ws, error, envelope.requestId)
 		}

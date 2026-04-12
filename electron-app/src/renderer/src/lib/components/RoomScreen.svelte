@@ -5,6 +5,7 @@
     RendererAppState,
   } from "../../../../../../shared/src/index.ts";
   import FilterSettingsCard from "./FilterSettingsCard.svelte";
+  import InputSyncSettingsCard from "./InputSyncSettingsCard.svelte";
   import OwnerControlsCard from "./OwnerControlsCard.svelte";
   import ParameterListCard from "./ParameterListCard.svelte";
   import ParticipantsCard from "./ParticipantsCard.svelte";
@@ -22,6 +23,8 @@
     onTakeOwner = () => {},
     onToggleParamSync = (_path: string, _enabled: boolean) => {},
     onToggleLocalPlayback = (_enabled: boolean) => {},
+    onToggleInputSend = (_enabled: boolean) => {},
+    onToggleInputSync = (_path: string, _enabled: boolean) => {},
     onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
     onSendAllParams = () => {},
     onSaveRoomSettings = (
@@ -40,6 +43,8 @@
     onTakeOwner?: () => void;
     onToggleParamSync?: (path: string, enabled: boolean) => void;
     onToggleLocalPlayback?: (enabled: boolean) => void;
+    onToggleInputSend?: (enabled: boolean) => void;
+    onToggleInputSync?: (path: string, enabled: boolean) => void;
     onEditParam?: (targetSessionId: string, param: ParamValue) => void;
     onSendAllParams?: () => void;
     onSaveRoomSettings?: (
@@ -181,6 +186,13 @@
             autoOwnerDraft,
             instantOwnerDraft,
           )}
+      />
+
+      <InputSyncSettingsCard
+        inputSendEnabled={appState.inputSendEnabled}
+        inputSyncToggles={appState.inputSyncToggles}
+        {onToggleInputSend}
+        {onToggleInputSync}
       />
     </Card.Content>
   </Card.Root>

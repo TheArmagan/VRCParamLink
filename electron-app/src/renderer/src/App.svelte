@@ -43,6 +43,8 @@
     avatarSyncActive: false,
     localPlaybackEnabled: true,
     participantParams: {},
+    inputSendEnabled: false,
+    inputSyncToggles: {},
   });
 
   let displayNameDraft = $state("");
@@ -195,6 +197,17 @@
     await window.api.toggleLocalPlayback(enabled);
   }
 
+  async function toggleInputSend(enabled: boolean): Promise<void> {
+    await window.api.toggleInputSend(enabled);
+  }
+
+  async function toggleInputSync(
+    path: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await window.api.toggleInputSync(path, enabled);
+  }
+
   async function editParam(
     targetSessionId: string,
     param: ParamValue,
@@ -232,6 +245,8 @@
         onTakeOwner={takeOwner}
         onToggleParamSync={toggleParamSync}
         onToggleLocalPlayback={toggleLocalPlayback}
+        onToggleInputSend={toggleInputSend}
+        onToggleInputSync={toggleInputSync}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

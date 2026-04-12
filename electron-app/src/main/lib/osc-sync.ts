@@ -4,6 +4,7 @@ import {
   DEFAULT_OSC_INBOUND_PORT,
   DEFAULT_OSC_OUTBOUND_PORT,
   isBuiltinVrcParam,
+  isInputOscPath,
   isSupportedOscPath,
   OSC_ECHO_SUPPRESSION_MS,
   PARAM_BATCH_INTERVAL_MS,
@@ -16,6 +17,9 @@ import { OSC, type OSCArg, type OSCMessage } from './OSC.ts'
 
 type OscSyncOptions = {
   onLocalParamBatch: (params: ParamValue[], batchSeq: number) => Promise<void> | void
+  onLocalInputBatch?: (params: ParamValue[]) => Promise<void> | void
+  isInputSendEnabled?: () => boolean
+  isInputSyncEnabled?: (path: string) => boolean
   onAvatarChange?: (avatarId: string) => void
   onError?: (error: Error) => void
 }
@@ -109,6 +113,14 @@ export class OscSyncService {
 
   applyRemoteBatch(payload: OutboundParamBatchPayload): void {
     for (const param of payload.params) {
+      if (isInputOscPath(param.path)) {
+        // Input param — check inputSyncToggles
+        if (this.options.isInputSyncEnabled?.(param.path)) {
+          this.sendParamToOsc(param)
+        }
+        continue
+      }
+      // Avatar param — existing shouldApplyRemoteParam check
       if (shouldApplyRemoteParam(param.path)) {
         this.sendParamToOsc(param)
       }
@@ -126,6 +138,15 @@ export class OscSyncService {
       if (avatarArg && avatarArg.type === 's' && typeof avatarArg.value === 'string') {
         this.options.onAvatarChange?.(avatarArg.value)
       }
+      return
+    }
+
+    // /input paths — separate flow, no throttle
+    if (isInputOscPath(message.address)) {
+      if (!this.options.isInputSendEnabled?.()) return
+      const param = this.mapOscMessageToParam(message)
+      if (!param) return
+      void this.options.onLocalInputBatch?.([param])
       return
     }
 

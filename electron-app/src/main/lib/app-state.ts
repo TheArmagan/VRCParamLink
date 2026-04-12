@@ -6,6 +6,7 @@ import {
   createDefaultRoomSettings,
   ERROR_CODES,
   FILTER_MODES,
+  isInputOscPath,
   PARAM_LIST_MAX_SIZE,
   SESSION_STATUSES,
   type AvatarIdUpdatedPayload,
@@ -56,7 +57,9 @@ const state: RendererAppState = {
   ownerAvatarId: null,
   avatarSyncActive: false,
   localPlaybackEnabled: true,
-  participantParams: {}
+  participantParams: {},
+  inputSendEnabled: false,
+  inputSyncToggles: {}
 }
 
 const syncToggles = new Map<string, boolean>()
@@ -227,15 +230,20 @@ export function applyParamBatch(_payload: OutboundParamBatchPayload): void {
     return
   }
 
+  // Filter out /input params — they are transient control inputs, not tracked in state
+  const avatarParams = _payload.params.filter((p) => !isInputOscPath(p.path))
+
   state.lastSyncAt = Date.now()
   state.lastSyncDirection = 'incoming'
   state.lastBatchSize = _payload.params.length
   state.lastBatchSourceSessionId = _payload.sourceSessionId
   state.receivedBatchCount += 1
 
-  updateParameterList(_payload.params)
-  updateParticipantParams(_payload.sourceSessionId, _payload.params)
-  if (_payload.params.length > 0) {
+  if (avatarParams.length > 0) {
+    updateParameterList(avatarParams)
+    updateParticipantParams(_payload.sourceSessionId, avatarParams)
+    state.lastSyncParamName = extractShortParamName(avatarParams[0].path)
+  } else if (_payload.params.length > 0) {
     state.lastSyncParamName = extractShortParamName(_payload.params[0].path)
   }
 }
@@ -293,6 +301,8 @@ export function clearRoomState(): void {
   state.avatarSyncActive = false
   state.participantParams = {}
   syncToggles.clear()
+  // Note: inputSendEnabled and inputSyncToggles are intentionally NOT reset
+  // — they are user preferences that persist across rooms
 }
 
 export function applyAvatarIdUpdated(payload: AvatarIdUpdatedPayload): void {
@@ -336,6 +346,22 @@ export function setParamSyncEnabled(path: string, enabled: boolean): void {
 
 export function setLocalPlaybackEnabled(enabled: boolean): void {
   state.localPlaybackEnabled = enabled
+}
+
+export function setInputSendEnabled(enabled: boolean): void {
+  state.inputSendEnabled = enabled
+}
+
+export function isInputSendEnabled(): boolean {
+  return state.inputSendEnabled
+}
+
+export function setInputSyncToggle(path: string, enabled: boolean): void {
+  state.inputSyncToggles = { ...state.inputSyncToggles, [path]: enabled }
+}
+
+export function isInputSyncEnabled(path: string): boolean {
+  return state.inputSyncToggles[path] ?? false
 }
 
 export function isParamSyncEnabled(path: string): boolean {

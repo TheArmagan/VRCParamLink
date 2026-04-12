@@ -17,6 +17,9 @@ export type OwnerChangeReason = 'manual' | 'auto_owner' | 'owner_left' | 'resume
 export type ParticipantLeaveReason = 'leave' | 'disconnect' | 'expired'
 export type SyncDirection = 'incoming' | 'outgoing' | null
 
+/** Per-path toggles for which /input paths the user wants to receive */
+export type InputSyncToggles = Record<string, boolean>
+
 export interface ParamValue {
   path: string
   valueType: ParamValueType
@@ -204,6 +207,8 @@ export interface RendererAppState {
   avatarSyncActive: boolean
   localPlaybackEnabled: boolean
   participantParams: Record<string, ParamEntry[]>
+  inputSendEnabled: boolean
+  inputSyncToggles: InputSyncToggles
 }
 
 export type AppActionResult =
@@ -223,6 +228,8 @@ export interface DesktopApi {
   updateRoomSettings: (settings: Partial<RoomSettings>) => Promise<AppActionResult>
   toggleParamSync: (path: string, enabled: boolean) => Promise<void>
   toggleLocalPlayback: (enabled: boolean) => Promise<void>
+  toggleInputSend: (enabled: boolean) => Promise<void>
+  toggleInputSync: (path: string, enabled: boolean) => Promise<void>
   editParam: (targetSessionId: string, param: ParamValue) => Promise<void>
   sendRemoteParamEdit: (targetSessionId: string, params: ParamValue[]) => Promise<void>
   sendAllParams: () => Promise<void>
