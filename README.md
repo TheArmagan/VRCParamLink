@@ -34,6 +34,7 @@ So if one avatar toggles something cute, matching, silly, spooky, romantic, or d
 ## Features 💞
 
 - **Real-time parameter sync** — owner's avatar changes are mirrored to everyone in the room.
+- **Full-body tracking sync** — forward your entire body movement (HMD, controllers, trackers) to other room members via OpenVR. They see you move in real-time — head, hands, hips, feet, everything.
 - **Remote parameter editing** — everyone can edit each other's avatar parameters (bool switches, int/float sliders) directly from the UI.
 - **Avatar change detection** — automatically detects when you switch avatars and resets sync state.
 - **Avatar ID matching** — sync is applied only when avatars match, so mismatched parameters won't mess things up.
@@ -70,6 +71,7 @@ Made for VRChat users who want soft, simple, room-based avatar syncing without a
 - One person controls the sync source.
 - Everyone else receives it.
 - But also, everyone can edit each other's parameters.
+- Full-body tracking? Yeah, that too. Your whole body, forwarded.
 - Everyone looks extra coordinated.
 
 <p align="center">
