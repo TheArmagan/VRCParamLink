@@ -163,7 +163,7 @@ export const IPC_CHANNELS = {
   toggleParamSync: 'app:toggle-param-sync',
   toggleLocalPlayback: 'app:toggle-local-playback',
   toggleInputSend: 'app:toggle-input-send',
-  toggleInputSync: 'app:toggle-input-sync',
+  toggleInputReceive: 'app:toggle-input-receive',
   editParam: 'app:edit-param',
   sendRemoteParamEdit: 'app:send-remote-param-edit',
   sendAllParams: 'app:send-all-params'

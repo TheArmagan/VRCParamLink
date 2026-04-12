@@ -44,7 +44,7 @@
     localPlaybackEnabled: true,
     participantParams: {},
     inputSendEnabled: false,
-    inputSyncToggles: {},
+    inputReceiveEnabled: false,
   });
 
   let displayNameDraft = $state("");
@@ -201,11 +201,8 @@
     await window.api.toggleInputSend(enabled);
   }
 
-  async function toggleInputSync(
-    path: string,
-    enabled: boolean,
-  ): Promise<void> {
-    await window.api.toggleInputSync(path, enabled);
+  async function toggleInputReceive(enabled: boolean): Promise<void> {
+    await window.api.toggleInputReceive(enabled);
   }
 
   async function editParam(
@@ -246,7 +243,7 @@
         onToggleParamSync={toggleParamSync}
         onToggleLocalPlayback={toggleLocalPlayback}
         onToggleInputSend={toggleInputSend}
-        onToggleInputSync={toggleInputSync}
+        onToggleInputReceive={toggleInputReceive}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

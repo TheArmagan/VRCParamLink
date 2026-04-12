@@ -59,7 +59,7 @@ const state: RendererAppState = {
   localPlaybackEnabled: true,
   participantParams: {},
   inputSendEnabled: false,
-  inputSyncToggles: {}
+  inputReceiveEnabled: false
 }
 
 const syncToggles = new Map<string, boolean>()
@@ -260,17 +260,11 @@ export function applyLocalParamBatch(paramCount: number, params?: ParamValue[]):
   state.sentBatchCount += 1
 
   if (params && params.length > 0) {
-    // Filter out /input params — they are transient control inputs, not tracked in state
-    const avatarParams = params.filter((p) => !isInputOscPath(p.path))
-    if (avatarParams.length > 0) {
-      updateParameterList(avatarParams)
-      if (state.selfSessionId) {
-        updateParticipantParams(state.selfSessionId, avatarParams)
-      }
-      state.lastSyncParamName = extractShortParamName(avatarParams[0].path)
-    } else {
-      state.lastSyncParamName = extractShortParamName(params[0].path)
+    updateParameterList(params)
+    if (state.selfSessionId) {
+      updateParticipantParams(state.selfSessionId, params)
     }
+    state.lastSyncParamName = extractShortParamName(params[0].path)
   }
 }
 
@@ -307,7 +301,7 @@ export function clearRoomState(): void {
   state.avatarSyncActive = false
   state.participantParams = {}
   syncToggles.clear()
-  // Note: inputSendEnabled and inputSyncToggles are intentionally NOT reset
+  // Note: inputSendEnabled and inputReceiveEnabled are intentionally NOT reset
   // — they are user preferences that persist across rooms
 }
 
@@ -362,12 +356,12 @@ export function isInputSendEnabled(): boolean {
   return state.inputSendEnabled
 }
 
-export function setInputSyncToggle(path: string, enabled: boolean): void {
-  state.inputSyncToggles = { ...state.inputSyncToggles, [path]: enabled }
+export function setInputReceiveEnabled(enabled: boolean): void {
+  state.inputReceiveEnabled = enabled
 }
 
-export function isInputSyncEnabled(path: string): boolean {
-  return state.inputSyncToggles[path] ?? false
+export function isInputReceiveEnabled(): boolean {
+  return state.inputReceiveEnabled
 }
 
 export function isParamSyncEnabled(path: string): boolean {

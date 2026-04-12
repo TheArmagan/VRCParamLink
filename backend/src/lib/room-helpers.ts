@@ -4,7 +4,6 @@ import {
   isBuiltinVrcParam,
   isInputOscPath,
   isSupportedOscPath,
-  SUPPORTED_OSC_PREFIX,
   ROOM_CODE_CHARSET,
   ROOM_CODE_LENGTH,
   createDefaultRoomSettings,
@@ -21,9 +20,9 @@ export function mergeSettings(partialSettings?: Partial<RoomSettings>): RoomSett
   for (const path of [...filterPaths, ...filterBlacklistPaths]) {
     // Allow glob patterns (e.g. /avatar/parameters/Eye*) — only reject
     // paths that clearly don't target the /avatar namespace after stripping
-    // leading glob characters. Filter paths must target /avatar only.
+    // leading glob characters.
     const literal = path.replace(/^[*?{[]+/, '')
-    if (literal.length > 0 && !literal.startsWith(SUPPORTED_OSC_PREFIX)) {
+    if (literal.length > 0 && !isSupportedOscPath(literal)) {
       throw new RoomManagerError(ERROR_CODES.invalidFilterPath, `Unsupported filter path: ${path}`)
     }
   }

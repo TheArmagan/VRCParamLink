@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputSyncEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputSyncToggle, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, updateDisplayName } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { checkForUpdates } from './lib/auto-updater.ts'
@@ -37,7 +37,7 @@ const oscSync = new OscSyncService({
     }
   },
   isInputSendEnabled: () => isInputSendEnabled(),
-  isInputSyncEnabled: (path) => isInputSyncEnabled(path),
+  isInputReceiveEnabled: () => isInputReceiveEnabled(),
   onAvatarChange: (avatarId) => {
     applySelfAvatarChange(avatarId)
     backendClient.sendAvatarChange(avatarId)
@@ -172,8 +172,8 @@ function registerIpcHandlers(): void {
     broadcastAppState()
   })
 
-  ipcMain.handle(IPC_CHANNELS.toggleInputSync, async (_event, path: string, enabled: boolean) => {
-    setInputSyncToggle(path, enabled)
+  ipcMain.handle(IPC_CHANNELS.toggleInputReceive, async (_event, enabled: boolean) => {
+    setInputReceiveEnabled(enabled)
     broadcastAppState()
   })
 

@@ -19,7 +19,7 @@ type OscSyncOptions = {
   onLocalParamBatch: (params: ParamValue[], batchSeq: number) => Promise<void> | void
   onLocalInputBatch?: (params: ParamValue[]) => Promise<void> | void
   isInputSendEnabled?: () => boolean
-  isInputSyncEnabled?: (path: string) => boolean
+  isInputReceiveEnabled?: () => boolean
   onAvatarChange?: (avatarId: string) => void
   onError?: (error: Error) => void
 }
@@ -34,6 +34,19 @@ type SuppressedParamRecord = {
 const RATE_WINDOW_MS = 3_000
 /** Updates within the window to classify a param as rapidly changing. */
 const RAPID_CHANGE_THRESHOLD = 20
+
+/**
+ * VRChat sends movement as /avatar/parameters/VelocityX/Z (read-only builtin params).
+ * We map these to /input axes so they can be synced to other users.
+ */
+const VELOCITY_TO_INPUT_MAP: Record<string, string> = {
+  '/avatar/parameters/VelocityZ': '/input/Vertical',
+  '/avatar/parameters/VelocityX': '/input/Horizontal'
+}
+
+const VELOCITY_Y_ADDRESS = '/avatar/parameters/VelocityY'
+/** VelocityY above this threshold emits /input/Jump 1; below emits 0. */
+const JUMP_VELOCITY_THRESHOLD = 0.65
 
 export class OscSyncService {
   private readonly osc = new OSC({
@@ -57,6 +70,8 @@ export class OscSyncService {
   private rapidFlushTimer: ReturnType<typeof setInterval> | null = null
   private batchSequence = 0
   private started = false
+  /** Tracks whether /input/Jump is currently held (to avoid duplicate sends). */
+  private jumpPressed = false
 
   constructor(private readonly options: OscSyncOptions) { }
 
@@ -114,8 +129,7 @@ export class OscSyncService {
   applyRemoteBatch(payload: OutboundParamBatchPayload): void {
     for (const param of payload.params) {
       if (isInputOscPath(param.path)) {
-        // Input param — check inputSyncToggles
-        if (this.options.isInputSyncEnabled?.(param.path)) {
+        if (this.options.isInputReceiveEnabled?.()) {
           this.sendParamToOsc(param)
         }
         continue
@@ -148,6 +162,42 @@ export class OscSyncService {
       if (!param) return
       void this.options.onLocalInputBatch?.([param])
       return
+    }
+
+    // VelocityY → /input/Jump threshold mapping
+    if (message.address === VELOCITY_Y_ADDRESS) {
+      if (this.options.isInputSendEnabled?.()) {
+        const param = this.mapOscMessageToParam(message)
+        if (param && typeof param.value === 'number') {
+          const shouldJump = param.value > JUMP_VELOCITY_THRESHOLD
+          if (shouldJump !== this.jumpPressed) {
+            this.jumpPressed = shouldJump
+            void this.options.onLocalInputBatch?.([{
+              path: '/input/Jump',
+              valueType: 'int',
+              value: shouldJump ? 1 : 0
+            }])
+          }
+        }
+      }
+      return
+    }
+
+    // Velocity → Input mapping: VRChat sends VelocityX/Z as builtin avatar params,
+    // we convert them to /input/Horizontal and /input/Vertical for remote sync
+    const inputPath = VELOCITY_TO_INPUT_MAP[message.address]
+    if (inputPath) {
+      if (this.options.isInputSendEnabled?.()) {
+        const param = this.mapOscMessageToParam(message)
+        if (param && typeof param.value === 'number') {
+          void this.options.onLocalInputBatch?.([{
+            path: inputPath,
+            valueType: 'float',
+            value: Math.max(-1, Math.min(1, param.value))
+          }])
+        }
+      }
+      return // Velocity params are always consumed here, never forwarded as avatar params
     }
 
     if (!isSupportedOscPath(message.address) || isBuiltinVrcParam(message.address)) {

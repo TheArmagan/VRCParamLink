@@ -24,7 +24,7 @@
     onToggleParamSync = (_path: string, _enabled: boolean) => {},
     onToggleLocalPlayback = (_enabled: boolean) => {},
     onToggleInputSend = (_enabled: boolean) => {},
-    onToggleInputSync = (_path: string, _enabled: boolean) => {},
+    onToggleInputReceive = (_enabled: boolean) => {},
     onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
     onSendAllParams = () => {},
     onSaveRoomSettings = (
@@ -44,7 +44,7 @@
     onToggleParamSync?: (path: string, enabled: boolean) => void;
     onToggleLocalPlayback?: (enabled: boolean) => void;
     onToggleInputSend?: (enabled: boolean) => void;
-    onToggleInputSync?: (path: string, enabled: boolean) => void;
+    onToggleInputReceive?: (enabled: boolean) => void;
     onEditParam?: (targetSessionId: string, param: ParamValue) => void;
     onSendAllParams?: () => void;
     onSaveRoomSettings?: (
@@ -190,9 +190,9 @@
 
       <InputSyncSettingsCard
         inputSendEnabled={appState.inputSendEnabled}
-        inputSyncToggles={appState.inputSyncToggles}
+        inputReceiveEnabled={appState.inputReceiveEnabled}
         {onToggleInputSend}
-        {onToggleInputSync}
+        {onToggleInputReceive}
       />
     </Card.Content>
   </Card.Root>
