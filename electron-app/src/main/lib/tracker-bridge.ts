@@ -105,7 +105,7 @@ export class TrackerBridge {
 
   private getBinaryPath(): string {
     if (is.dev) {
-      return join(app.getAppPath(), '../../native-windows/target/release/vrcpl-tracker-bridge.exe')
+      return join(app.getAppPath(), '../native-windows/target/release/vrcpl-tracker-bridge.exe')
     }
     return join(process.resourcesPath, 'vrcpl-tracker-bridge.exe')
   }

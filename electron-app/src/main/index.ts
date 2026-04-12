@@ -7,12 +7,14 @@ import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveE
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { TrackerBridge } from './lib/tracker-bridge.ts'
+import { ensureVirtualHmdForReceive, disableVirtualHmd, recoverVirtualHmdIfNeeded } from './lib/virtual-hmd.ts'
 import { checkForUpdates } from './lib/auto-updater.ts'
 
 const trackerBridge = new TrackerBridge({
   onBatch: (batch) => {
     if (!isTrackingSendEnabled()) return
     backendClient.sendTrackingBatch(batch)
+    console.log('[tracker-bridge] sent tracking batch with', batch.trackers)
   },
   onError: (error) => {
     console.error('[tracker-bridge]', error)
@@ -219,6 +221,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.toggleTrackingReceive, async (_event, enabled: boolean) => {
     setTrackingReceiveEnabled(enabled)
+    if (enabled) {
+      const result = ensureVirtualHmdForReceive()
+      if (result.error) {
+        console.error('[virtual-hmd]', result.error)
+      }
+    } else {
+      disableVirtualHmd()
+    }
     broadcastAppState()
   })
 
@@ -268,6 +278,8 @@ app.whenReady().then(() => {
 
   setAppVersion(app.getVersion())
 
+  recoverVirtualHmdIfNeeded()
+
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
@@ -286,6 +298,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   oscSync.stop()
   trackerBridge.destroy()
+  disableVirtualHmd()
   if (process.platform !== 'darwin') {
     app.quit()
   }
