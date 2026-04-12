@@ -39,6 +39,7 @@ So if one avatar toggles something cute, matching, silly, spooky, romantic, or d
 - **Avatar ID matching** — sync is applied only when avatars match, so mismatched parameters won't mess things up.
 - **Per-parameter sync toggle** — choose which parameters to sync and which to ignore.
 - **Flexible ownership** — auto-owner mode, instant takeover, or manual control. Your room, your rules.
+- **Input sync via velocity mapping** — sync movement and actions between room members. VelocityX/Z map to horizontal/vertical input, and VelocityY triggers jump — all opt-in with simple send/receive toggles.
 - **Whitelist / blacklist filtering** — the owner can filter which parameters are synced room-wide.
 - **Reconnect grace period** — if you disconnect, you have 10 seconds to rejoin your session.
 - **Send All Parameters** — resync button to push your full parameter state to the room at any time.
