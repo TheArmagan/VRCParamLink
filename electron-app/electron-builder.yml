@@ -13,6 +13,8 @@ files:
 extraResources:
   - from: ../native-windows/target/release/vrcpl-tracker-bridge.exe
     to: vrcpl-tracker-bridge.exe
+  - from: ../native-windows/driver-vrcpl/vrcpl
+    to: vrcpl-driver
 asarUnpack:
   - resources/**
 win:

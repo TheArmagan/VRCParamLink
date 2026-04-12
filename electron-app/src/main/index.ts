@@ -7,8 +7,12 @@ import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveE
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { TrackerBridge } from './lib/tracker-bridge.ts'
+import { TrackerPipeClient } from './lib/tracker-pipe-client.ts'
 import { ensureVirtualHmdForReceive, disableVirtualHmd, recoverVirtualHmdIfNeeded } from './lib/virtual-hmd.ts'
+import { ensureDriverRegistered } from './lib/driver-manager.ts'
 import { checkForUpdates } from './lib/auto-updater.ts'
+
+const pipeClient = new TrackerPipeClient()
 
 const trackerBridge = new TrackerBridge({
   onBatch: (batch) => {
@@ -91,7 +95,7 @@ const backendClient = new BackendClient({
   },
   onRemoteTrackingBatch: (payload) => {
     if (!isTrackingReceiveEnabled()) return
-    oscSync.sendTrackingToVRChat(payload.trackers)
+    pipeClient.sendTrackers(payload.trackers)
   },
   onRoomSnapshot: (snapshot) => {
     oscSync.applySnapshot(snapshot)
@@ -222,11 +226,16 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.toggleTrackingReceive, async (_event, enabled: boolean) => {
     setTrackingReceiveEnabled(enabled)
     if (enabled) {
-      const result = ensureVirtualHmdForReceive()
-      if (result.error) {
-        console.error('[virtual-hmd]', result.error)
+      const hmdResult = ensureVirtualHmdForReceive()
+      if (hmdResult.error) {
+        console.error('[virtual-hmd]', hmdResult.error)
       }
+      // Connect to our SteamVR driver's pipe (with retries while SteamVR starts)
+      pipeClient.connectWithRetry().then((ok) => {
+        if (!ok) console.error('[tracker-pipe] Could not connect to driver')
+      })
     } else {
+      pipeClient.disconnect()
       disableVirtualHmd()
     }
     broadcastAppState()
@@ -279,6 +288,7 @@ app.whenReady().then(() => {
   setAppVersion(app.getVersion())
 
   recoverVirtualHmdIfNeeded()
+  ensureDriverRegistered()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -298,6 +308,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   oscSync.stop()
   trackerBridge.destroy()
+  pipeClient.disconnect()
   disableVirtualHmd()
   if (process.platform !== 'darwin') {
     app.quit()
