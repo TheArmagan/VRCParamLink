@@ -3,7 +3,7 @@ import { createInterface } from 'readline'
 import { join } from 'path'
 import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
-import type { TrackingBatchPayload, TrackerEntry } from '../../../../shared/src/index.ts'
+import type { TrackingBatchPayload } from '../../../../shared/src/index.ts'
 
 type TrackerBridgeOptions = {
   onBatch: (batch: TrackingBatchPayload) => void
