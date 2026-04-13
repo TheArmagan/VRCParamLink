@@ -7,8 +7,8 @@
  * Binary pipe protocol (little-endian):
  *   Header (4 bytes):
  *     [0x56 0x50]  magic ("VP")
- *     [uint8]      message type: 0x01=pose_update, 0x02=reset_all
- *     [uint8]      tracker count N
+ *     [uint8]      message type: 0x01=pose_update, 0x02=reset_all, 0x03=set_origin
+ *     [uint8]      tracker count N (for pose_update only)
  *   Per tracker (25 bytes each, only for type 0x01):
  *     [uint8]      slot (0=head, 1-8=body)
  *     [float32×3]  position  (x, y, z)
@@ -354,6 +354,9 @@ private:
         if (!ReadExact(pipe, buf, need))
           break;
 
+        // Track which slots received updates this batch
+        bool updated[MAX_TRACKERS] = {};
+
         DWORD off = 0;
         for (int i = 0; i < count; i++)
         {
@@ -370,8 +373,15 @@ private:
           off += 24;
           m_devices[slot]->UpdatePose(v[0], v[1], v[2],
                                       v[3], v[4], v[5]);
+          updated[slot] = true;
         }
-        DriverLog("[vrcpl] Pose update: %d trackers\n", (int)count);
+
+        // Invalidate any slot that was NOT in this batch
+        for (int i = 0; i < MAX_TRACKERS; i++)
+        {
+          if (!updated[i])
+            m_devices[i]->InvalidatePose();
+        }
       }
       else if (msgType == MSG_RESET_ALL)
       {
@@ -385,9 +395,11 @@ private:
           break;
         float v[6];
         std::memcpy(v, buf, 24);
+        // Reset all poses first, then apply new origin
+        InvalidateAll();
         for (int i = 0; i < MAX_TRACKERS; i++)
           m_devices[i]->SetOrigin(v[0], v[1], v[2], v[3], v[4], v[5]);
-        DriverLog("[vrcpl] Origin set: pos(%.2f, %.2f, %.2f) rot(%.1f, %.1f, %.1f)\n",
+        DriverLog("[vrcpl] Origin reset: pos(%.2f, %.2f, %.2f) rot(%.1f, %.1f, %.1f)\n",
                   v[0], v[1], v[2], v[3], v[4], v[5]);
       }
       // Unknown message types are silently ignored

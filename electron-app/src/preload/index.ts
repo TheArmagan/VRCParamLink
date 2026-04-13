@@ -57,6 +57,12 @@ const api: DesktopApi = {
   recalibrateTrackingReceive: async () => {
     await ipcRenderer.invoke(IPC_CHANNELS.recalibrateTrackingReceive)
   },
+  toggleTrackingSendSlot: async (address: string, enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleTrackingSendSlot, address, enabled)
+  },
+  toggleTrackingReceiveSlot: async (address: string, enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleTrackingReceiveSlot, address, enabled)
+  },
   editParam: async (targetSessionId: string, param: ParamValue) => {
     await ipcRenderer.invoke(IPC_CHANNELS.editParam, targetSessionId, param)
   },

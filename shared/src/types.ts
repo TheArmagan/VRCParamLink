@@ -181,6 +181,11 @@ export interface TrackingBatchPayload {
   trackers: TrackerEntry[]
 }
 
+export interface TrackingSlotState {
+  address: string
+  enabled: boolean
+}
+
 export interface OutboundTrackingBatchPayload {
   roomCode: string
   sourceSessionId: string
@@ -226,6 +231,8 @@ export interface RendererAppState {
   inputReceiveEnabled: boolean
   trackingSendEnabled: boolean
   trackingReceiveEnabled: boolean
+  trackingSendSlots: TrackingSlotState[]
+  trackingReceiveSlots: TrackingSlotState[]
 }
 
 export type AppActionResult =
@@ -250,6 +257,8 @@ export interface DesktopApi {
   toggleTrackingSend: (enabled: boolean) => Promise<void>
   toggleTrackingReceive: (enabled: boolean) => Promise<void>
   recalibrateTrackingReceive: () => Promise<void>
+  toggleTrackingSendSlot: (address: string, enabled: boolean) => Promise<void>
+  toggleTrackingReceiveSlot: (address: string, enabled: boolean) => Promise<void>
   editParam: (targetSessionId: string, param: ParamValue) => Promise<void>
   sendRemoteParamEdit: (targetSessionId: string, params: ParamValue[]) => Promise<void>
   sendAllParams: () => Promise<void>

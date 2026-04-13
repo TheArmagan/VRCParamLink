@@ -167,6 +167,8 @@ export const IPC_CHANNELS = {
   toggleTrackingSend: 'app:toggle-tracking-send',
   toggleTrackingReceive: 'app:toggle-tracking-receive',
   recalibrateTrackingReceive: 'app:recalibrate-tracking-receive',
+  toggleTrackingSendSlot: 'app:toggle-tracking-send-slot',
+  toggleTrackingReceiveSlot: 'app:toggle-tracking-receive-slot',
   editParam: 'app:edit-param',
   sendRemoteParamEdit: 'app:send-remote-param-edit',
   sendAllParams: 'app:send-all-params'

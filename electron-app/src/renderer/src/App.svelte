@@ -47,6 +47,8 @@
     inputReceiveEnabled: false,
     trackingSendEnabled: false,
     trackingReceiveEnabled: false,
+    trackingSendSlots: [],
+    trackingReceiveSlots: [],
   });
 
   let displayNameDraft = $state("");
@@ -219,6 +221,20 @@
     await window.api.recalibrateTrackingReceive();
   }
 
+  async function toggleTrackingSendSlot(
+    address: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await window.api.toggleTrackingSendSlot(address, enabled);
+  }
+
+  async function toggleTrackingReceiveSlot(
+    address: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await window.api.toggleTrackingReceiveSlot(address, enabled);
+  }
+
   async function editParam(
     targetSessionId: string,
     param: ParamValue,
@@ -261,6 +277,8 @@
         onToggleTrackingSend={toggleTrackingSend}
         onToggleTrackingReceive={toggleTrackingReceive}
         onRecalibrateTrackingReceive={recalibrateTrackingReceive}
+        onToggleTrackingSendSlot={toggleTrackingSendSlot}
+        onToggleTrackingReceiveSlot={toggleTrackingReceiveSlot}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

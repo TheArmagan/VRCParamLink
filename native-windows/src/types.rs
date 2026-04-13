@@ -24,6 +24,8 @@ pub struct CalibrationSnapshot {
     pub hmd_rotation: [f32; 3],
     /// HMD inverse rotation matrix (3×3) for transforming positions into HMD-local space.
     pub hmd_inv_rotation_matrix: [[f32; 3]; 3],
+    /// HMD inverse quaternion for rotating tracker orientations into HMD-local space.
+    pub hmd_inv_quaternion: [f32; 4],
 }
 
 /// Mapping of an OpenVR device index to a VRChat OSC tracker slot.

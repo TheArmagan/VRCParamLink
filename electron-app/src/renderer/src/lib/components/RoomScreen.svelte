@@ -29,6 +29,8 @@
     onToggleTrackingSend = (_enabled: boolean) => {},
     onToggleTrackingReceive = (_enabled: boolean) => {},
     onRecalibrateTrackingReceive = () => {},
+    onToggleTrackingSendSlot = (_address: string, _enabled: boolean) => {},
+    onToggleTrackingReceiveSlot = (_address: string, _enabled: boolean) => {},
     onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
     onSendAllParams = () => {},
     onSaveRoomSettings = (
@@ -52,6 +54,8 @@
     onToggleTrackingSend?: (enabled: boolean) => void;
     onToggleTrackingReceive?: (enabled: boolean) => void;
     onRecalibrateTrackingReceive?: () => void;
+    onToggleTrackingSendSlot?: (address: string, enabled: boolean) => void;
+    onToggleTrackingReceiveSlot?: (address: string, enabled: boolean) => void;
     onEditParam?: (targetSessionId: string, param: ParamValue) => void;
     onSendAllParams?: () => void;
     onSaveRoomSettings?: (
@@ -205,9 +209,13 @@
       <TrackingSyncSettingsCard
         trackingSendEnabled={appState.trackingSendEnabled}
         trackingReceiveEnabled={appState.trackingReceiveEnabled}
+        trackingSendSlots={appState.trackingSendSlots}
+        trackingReceiveSlots={appState.trackingReceiveSlots}
         {onToggleTrackingSend}
         {onToggleTrackingReceive}
         {onRecalibrateTrackingReceive}
+        {onToggleTrackingSendSlot}
+        {onToggleTrackingReceiveSlot}
       />
     </Card.Content>
   </Card.Root>

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName, updateTrackingSendSlots, updateTrackingReceiveSlots, toggleTrackingSendSlot, toggleTrackingReceiveSlot, getDisabledSendSlotAddresses, getDisabledReceiveSlotAddresses } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { TrackerBridge } from './lib/tracker-bridge.ts'
@@ -17,8 +17,15 @@ const pipeClient = new TrackerPipeClient()
 const trackerBridge = new TrackerBridge({
   onBatch: (batch) => {
     if (!isTrackingSendEnabled()) return
-    backendClient.sendTrackingBatch(batch)
-    console.log('[tracker-bridge] sent tracking batch with', batch.trackers)
+    // Update active send slots from discovered trackers
+    const addresses = batch.trackers.map((t) => t.address)
+    updateTrackingSendSlots(addresses)
+    // Filter out disabled send slots
+    const disabled = getDisabledSendSlotAddresses()
+    const filtered = batch.trackers.filter((t) => !disabled.has(t.address))
+    if (filtered.length === 0) return
+    backendClient.sendTrackingBatch({ ts: batch.ts, trackers: filtered })
+    broadcastAppState()
   },
   onError: (error) => {
     console.error('[tracker-bridge]', error)
@@ -95,7 +102,16 @@ const backendClient = new BackendClient({
   },
   onRemoteTrackingBatch: (payload) => {
     if (!isTrackingReceiveEnabled()) return
-    pipeClient.sendTrackers(payload.trackers)
+    // Update active receive slots from sender's trackers
+    const addresses = payload.trackers.map((t) => t.address)
+    updateTrackingReceiveSlots(addresses)
+    // Filter out disabled receive slots
+    const disabled = getDisabledReceiveSlotAddresses()
+    const filtered = payload.trackers.filter((t) => !disabled.has(t.address))
+    if (filtered.length > 0) {
+      pipeClient.sendTrackers(filtered)
+    }
+    broadcastAppState()
   },
   onRoomSnapshot: (snapshot) => {
     oscSync.applySnapshot(snapshot)
@@ -277,6 +293,16 @@ function registerIpcHandlers(): void {
     if (isTrackingReceiveEnabled() && pipeClient.isConnected) {
       await calibrateReceiveOrigin()
     }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.toggleTrackingSendSlot, async (_event, address: string, enabled: boolean) => {
+    toggleTrackingSendSlot(address, enabled)
+    broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.toggleTrackingReceiveSlot, async (_event, address: string, enabled: boolean) => {
+    toggleTrackingReceiveSlot(address, enabled)
+    broadcastAppState()
   })
 
   ipcMain.handle(IPC_CHANNELS.editParam, async (_event, targetSessionId: string, param: ParamValue) => {

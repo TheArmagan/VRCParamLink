@@ -95,7 +95,6 @@ pub fn read_poses(
 
         let matrix = pose.device_to_absolute_tracking();
         let raw_pos = math_utils::position_from_matrix(matrix);
-        let raw_rot = math_utils::euler_from_matrix(matrix);
 
         // Apply calibration: transform position relative to calibration HMD
         let relative_pos = math_utils::vec3_sub(&raw_pos, &calibration.hmd_position);
@@ -104,13 +103,10 @@ pub fn read_poses(
             &relative_pos,
         );
 
-        // Rotation: subtract calibration HMD rotation (simple euler subtraction
-        // is approximate but sufficient for near-zero calibration offsets)
-        let calibrated_rot = [
-            raw_rot[0] - calibration.hmd_rotation[0],
-            raw_rot[1] - calibration.hmd_rotation[1],
-            raw_rot[2] - calibration.hmd_rotation[2],
-        ];
+        // Rotation: use quaternion math for correct HMD-relative rotation
+        let raw_quat = math_utils::quat_from_matrix(matrix);
+        let calibrated_quat = math_utils::quat_mul(&calibration.hmd_inv_quaternion, &raw_quat);
+        let calibrated_rot = math_utils::euler_from_quat(&calibrated_quat);
 
         trackers.push(TrackerEntry {
             address: slot.osc_address.clone(),

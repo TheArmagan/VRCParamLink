@@ -61,7 +61,9 @@ const state: RendererAppState = {
   inputSendEnabled: false,
   inputReceiveEnabled: false,
   trackingSendEnabled: false,
-  trackingReceiveEnabled: false
+  trackingReceiveEnabled: false,
+  trackingSendSlots: [],
+  trackingReceiveSlots: []
 }
 
 const syncToggles = new Map<string, boolean>()
@@ -380,6 +382,44 @@ export function setTrackingReceiveEnabled(enabled: boolean): void {
 
 export function isTrackingReceiveEnabled(): boolean {
   return state.trackingReceiveEnabled
+}
+
+export function updateTrackingSendSlots(addresses: string[]): void {
+  const existing = new Map(state.trackingSendSlots.map((s) => [s.address, s.enabled]))
+  state.trackingSendSlots = addresses.map((address) => ({
+    address,
+    enabled: existing.get(address) ?? true
+  }))
+}
+
+export function toggleTrackingSendSlot(address: string, enabled: boolean): void {
+  const slot = state.trackingSendSlots.find((s) => s.address === address)
+  if (slot) {
+    slot.enabled = enabled
+  }
+}
+
+export function updateTrackingReceiveSlots(addresses: string[]): void {
+  const existing = new Map(state.trackingReceiveSlots.map((s) => [s.address, s.enabled]))
+  state.trackingReceiveSlots = addresses.map((address) => ({
+    address,
+    enabled: existing.get(address) ?? true
+  }))
+}
+
+export function toggleTrackingReceiveSlot(address: string, enabled: boolean): void {
+  const slot = state.trackingReceiveSlots.find((s) => s.address === address)
+  if (slot) {
+    slot.enabled = enabled
+  }
+}
+
+export function getDisabledSendSlotAddresses(): Set<string> {
+  return new Set(state.trackingSendSlots.filter((s) => !s.enabled).map((s) => s.address))
+}
+
+export function getDisabledReceiveSlotAddresses(): Set<string> {
+  return new Set(state.trackingReceiveSlots.filter((s) => !s.enabled).map((s) => s.address))
 }
 
 export function isParamSyncEnabled(path: string): boolean {
