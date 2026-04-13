@@ -28,6 +28,7 @@
     onToggleInputReceive = (_enabled: boolean) => {},
     onToggleTrackingSend = (_enabled: boolean) => {},
     onToggleTrackingReceive = (_enabled: boolean) => {},
+    onRecalibrateTrackingReceive = () => {},
     onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
     onSendAllParams = () => {},
     onSaveRoomSettings = (
@@ -50,6 +51,7 @@
     onToggleInputReceive?: (enabled: boolean) => void;
     onToggleTrackingSend?: (enabled: boolean) => void;
     onToggleTrackingReceive?: (enabled: boolean) => void;
+    onRecalibrateTrackingReceive?: () => void;
     onEditParam?: (targetSessionId: string, param: ParamValue) => void;
     onSendAllParams?: () => void;
     onSaveRoomSettings?: (
@@ -205,6 +207,7 @@
         trackingReceiveEnabled={appState.trackingReceiveEnabled}
         {onToggleTrackingSend}
         {onToggleTrackingReceive}
+        {onRecalibrateTrackingReceive}
       />
     </Card.Content>
   </Card.Root>

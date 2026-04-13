@@ -95,13 +95,38 @@ const backendClient = new BackendClient({
   },
   onRemoteTrackingBatch: (payload) => {
     if (!isTrackingReceiveEnabled()) return
-    console.log('[tracking-recv] batch received:', payload.trackers.length, 'trackers, pipe connected:', pipeClient.isConnected)
     pipeClient.sendTrackers(payload.trackers)
   },
   onRoomSnapshot: (snapshot) => {
     oscSync.applySnapshot(snapshot)
   }
 })
+
+/**
+ * Get the local HMD pose via the tracker bridge and send it to the
+ * SteamVR driver as the WorldFromDriver origin so that incoming
+ * HMD-relative tracking data is correctly placed at the receiver's
+ * head position.
+ */
+async function calibrateReceiveOrigin(): Promise<void> {
+  const wasRunning = trackerBridge.isRunning
+  if (!wasRunning) {
+    trackerBridge.spawn()
+  }
+
+  const pose = await trackerBridge.getHmdPose()
+  if (pose) {
+    pipeClient.sendOrigin(pose.position, pose.rotation)
+    console.log('[tracking-receive] Origin calibrated:', pose.position, pose.rotation)
+  } else {
+    console.warn('[tracking-receive] Could not get HMD pose for origin calibration')
+  }
+
+  // If we spawned the bridge only for this query and tracking send is not enabled, stop it
+  if (!wasRunning && !isTrackingSendEnabled()) {
+    trackerBridge.destroy()
+  }
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -218,6 +243,7 @@ function registerIpcHandlers(): void {
       if (!trackerBridge.isRunning) {
         trackerBridge.spawn()
       }
+      trackerBridge.startTracking()
     } else {
       trackerBridge.stopTracking()
     }
@@ -232,14 +258,25 @@ function registerIpcHandlers(): void {
         console.error('[virtual-hmd]', hmdResult.error)
       }
       // Connect to our SteamVR driver's pipe (with retries while SteamVR starts)
-      pipeClient.connectWithRetry().then((ok) => {
-        if (!ok) console.error('[tracker-pipe] Could not connect to driver')
+      pipeClient.connectWithRetry().then(async (ok) => {
+        if (!ok) {
+          console.error('[tracker-pipe] Could not connect to driver')
+          return
+        }
+        // Calibrate receive origin: get local HMD pose and send to driver
+        await calibrateReceiveOrigin()
       })
     } else {
       pipeClient.disconnect()
       disableVirtualHmd()
     }
     broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.recalibrateTrackingReceive, async () => {
+    if (isTrackingReceiveEnabled() && pipeClient.isConnected) {
+      await calibrateReceiveOrigin()
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.editParam, async (_event, targetSessionId: string, param: ParamValue) => {

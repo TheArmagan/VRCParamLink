@@ -34,6 +34,7 @@
 static constexpr uint8_t MAGIC[2] = {0x56, 0x50};
 static constexpr uint8_t MSG_POSE_UPDATE = 0x01;
 static constexpr uint8_t MSG_RESET_ALL = 0x02;
+static constexpr uint8_t MSG_SET_ORIGIN = 0x03;
 static constexpr int MAX_TRACKERS = 9; // head + 8 body
 static constexpr float PI = 3.14159265358979323846f;
 static const char *PIPE_NAME = "\\\\.\\pipe\\vrcpl-tracking";
@@ -181,6 +182,21 @@ public:
     if (m_active && m_deviceIndex != vr::k_unTrackedDeviceIndexInvalid)
       vr::VRServerDriverHost()->TrackedDevicePoseUpdated(
           m_deviceIndex, m_pose, sizeof(m_pose));
+  }
+
+  /** Update the WorldFromDriver transform so that driver (0,0,0) maps to
+   *  the receiver's HMD position in world space. */
+  void SetOrigin(float ox, float oy, float oz,
+                 float orx, float ory, float orz)
+  {
+    auto oq = EulerToQuat(orx, ory, orz);
+    {
+      std::lock_guard<std::mutex> lk(m_mtx);
+      m_pose.vecWorldFromDriverTranslation[0] = static_cast<double>(ox);
+      m_pose.vecWorldFromDriverTranslation[1] = static_cast<double>(oy);
+      m_pose.vecWorldFromDriverTranslation[2] = static_cast<double>(oz);
+      m_pose.qWorldFromDriverRotation = oq;
+    }
   }
 
   void InvalidatePose()
@@ -360,6 +376,19 @@ private:
       else if (msgType == MSG_RESET_ALL)
       {
         InvalidateAll();
+      }
+      else if (msgType == MSG_SET_ORIGIN)
+      {
+        // 24 bytes: 6 floats (px, py, pz, rx, ry, rz)
+        uint8_t buf[24];
+        if (!ReadExact(pipe, buf, 24))
+          break;
+        float v[6];
+        std::memcpy(v, buf, 24);
+        for (int i = 0; i < MAX_TRACKERS; i++)
+          m_devices[i]->SetOrigin(v[0], v[1], v[2], v[3], v[4], v[5]);
+        DriverLog("[vrcpl] Origin set: pos(%.2f, %.2f, %.2f) rot(%.1f, %.1f, %.1f)\n",
+                  v[0], v[1], v[2], v[3], v[4], v[5]);
       }
       // Unknown message types are silently ignored
     }

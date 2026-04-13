@@ -5,6 +5,7 @@ const PIPE_PATH = '\\\\.\\pipe\\vrcpl-tracking'
 const MAGIC = Buffer.from([0x56, 0x50])
 const MSG_POSE_UPDATE = 0x01
 const MSG_RESET_ALL = 0x02
+const MSG_SET_ORIGIN = 0x03
 const RECONNECT_INTERVAL_MS = 2_000
 const INITIAL_RETRY_INTERVAL_MS = 500
 const INITIAL_RETRY_MAX_ATTEMPTS = 30
@@ -143,6 +144,23 @@ export class TrackerPipeClient {
     MAGIC.copy(buf, 0)
     buf[2] = MSG_RESET_ALL
     buf[3] = 0
+    this.socket.write(buf)
+  }
+
+  sendOrigin(position: [number, number, number], rotation: [number, number, number]): void {
+    if (!this._connected || !this.socket) return
+    // Header (4 bytes) + 6 floats (24 bytes)
+    const buf = Buffer.alloc(28)
+    MAGIC.copy(buf, 0)
+    buf[2] = MSG_SET_ORIGIN
+    buf[3] = 0
+    let offset = 4
+    buf.writeFloatLE(position[0], offset); offset += 4
+    buf.writeFloatLE(position[1], offset); offset += 4
+    buf.writeFloatLE(position[2], offset); offset += 4
+    buf.writeFloatLE(rotation[0], offset); offset += 4
+    buf.writeFloatLE(rotation[1], offset); offset += 4
+    buf.writeFloatLE(rotation[2], offset); offset += 4
     this.socket.write(buf)
   }
 

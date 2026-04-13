@@ -249,6 +249,7 @@ export interface DesktopApi {
   toggleInputReceive: (enabled: boolean) => Promise<void>
   toggleTrackingSend: (enabled: boolean) => Promise<void>
   toggleTrackingReceive: (enabled: boolean) => Promise<void>
+  recalibrateTrackingReceive: () => Promise<void>
   editParam: (targetSessionId: string, param: ParamValue) => Promise<void>
   sendRemoteParamEdit: (targetSessionId: string, params: ParamValue[]) => Promise<void>
   sendAllParams: () => Promise<void>

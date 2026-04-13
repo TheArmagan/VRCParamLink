@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { PersonStanding, ChevronDown } from "@lucide/svelte";
+  import { PersonStanding, ChevronDown, RotateCcw } from "@lucide/svelte";
   import { Switch } from "$lib/components/ui/switch/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
   import { Separator } from "$lib/components/ui/separator/index.js";
@@ -10,11 +10,13 @@
     trackingReceiveEnabled = false,
     onToggleTrackingSend = (_enabled: boolean) => {},
     onToggleTrackingReceive = (_enabled: boolean) => {},
+    onRecalibrateTrackingReceive = () => {},
   }: {
     trackingSendEnabled?: boolean;
     trackingReceiveEnabled?: boolean;
     onToggleTrackingSend?: (enabled: boolean) => void;
     onToggleTrackingReceive?: (enabled: boolean) => void;
+    onRecalibrateTrackingReceive?: () => void;
   } = $props();
 
   let open = $state(false);
@@ -63,6 +65,17 @@
           onCheckedChange={(checked) => onToggleTrackingReceive(checked)}
         />
       </div>
+
+      {#if trackingReceiveEnabled}
+        <!-- Recalibrate Receive Origin -->
+        <button
+          class="flex w-full items-center justify-center gap-1.5 rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onclick={() => onRecalibrateTrackingReceive()}
+        >
+          <RotateCcw class="size-3" />
+          Recalibrate Position
+        </button>
+      {/if}
     </div>
   </Collapsible.Content>
 </Collapsible.Root>

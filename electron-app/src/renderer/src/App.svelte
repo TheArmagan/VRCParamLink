@@ -215,6 +215,10 @@
     await window.api.toggleTrackingReceive(enabled);
   }
 
+  async function recalibrateTrackingReceive(): Promise<void> {
+    await window.api.recalibrateTrackingReceive();
+  }
+
   async function editParam(
     targetSessionId: string,
     param: ParamValue,
@@ -256,6 +260,7 @@
         onToggleInputReceive={toggleInputReceive}
         onToggleTrackingSend={toggleTrackingSend}
         onToggleTrackingReceive={toggleTrackingReceive}
+        onRecalibrateTrackingReceive={recalibrateTrackingReceive}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

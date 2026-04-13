@@ -5,6 +5,11 @@ import { app } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { TrackingBatchPayload } from '../../../../shared/src/index.ts'
 
+type HmdPose = {
+  position: [number, number, number]
+  rotation: [number, number, number]
+}
+
 type TrackerBridgeOptions = {
   onBatch: (batch: TrackingBatchPayload) => void
   onError?: (error: string) => void
@@ -14,6 +19,7 @@ type TrackerBridgeOptions = {
 export class TrackerBridge {
   private process: ChildProcess | null = null
   private readonly options: TrackerBridgeOptions
+  private hmdPoseResolve: ((pose: HmdPose | null) => void) | null = null
 
   constructor(options: TrackerBridgeOptions) {
     this.options = options
@@ -44,7 +50,13 @@ export class TrackerBridge {
     const rl = createInterface({ input: this.process.stdout })
     rl.on('line', (line) => {
       try {
-        const batch = JSON.parse(line) as TrackingBatchPayload
+        const parsed = JSON.parse(line)
+        if (parsed && parsed.type === 'hmd_pose' && this.hmdPoseResolve) {
+          this.hmdPoseResolve({ position: parsed.position, rotation: parsed.rotation })
+          this.hmdPoseResolve = null
+          return
+        }
+        const batch = parsed as TrackingBatchPayload
         if (batch && typeof batch.ts === 'number' && Array.isArray(batch.trackers)) {
           this.options.onBatch(batch)
         }
@@ -61,12 +73,20 @@ export class TrackerBridge {
     }
 
     this.process.on('exit', (code) => {
+      if (this.hmdPoseResolve) {
+        this.hmdPoseResolve(null)
+        this.hmdPoseResolve = null
+      }
       this.process = null
       this.options.onExit?.(code)
     })
 
     this.process.on('error', (err) => {
       this.options.onError?.(err.message)
+      if (this.hmdPoseResolve) {
+        this.hmdPoseResolve(null)
+        this.hmdPoseResolve = null
+      }
       this.process = null
     })
 
@@ -93,6 +113,21 @@ export class TrackerBridge {
 
   get isRunning(): boolean {
     return this.process !== null
+  }
+
+  getHmdPose(): Promise<HmdPose | null> {
+    if (!this.process) return Promise.resolve(null)
+    return new Promise((resolve) => {
+      this.hmdPoseResolve = resolve
+      this.sendCommand({ cmd: 'get_hmd_pose' })
+      // Timeout after 2 seconds
+      setTimeout(() => {
+        if (this.hmdPoseResolve === resolve) {
+          this.hmdPoseResolve = null
+          resolve(null)
+        }
+      }, 2000)
+    })
   }
 
   private sendCommand(cmd: Record<string, string>): void {

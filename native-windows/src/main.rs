@@ -9,7 +9,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use types::{LogEntry, StdinCommand};
+use types::{HmdPoseResponse, LogEntry, StdinCommand};
 
 /// Tick interval for the tracking loop (50ms = 20 Hz).
 const TICK_INTERVAL: Duration = Duration::from_millis(50);
@@ -163,6 +163,32 @@ fn main() {
                     if tracking_active {
                         tracking_active = false;
                         log_stderr("info", "Tracking stopped", None);
+                    }
+                }
+                Ok(StdinCommand::GetHmdPose) => {
+                    // Read current HMD pose and write it to stdout
+                    let poses = system.device_to_absolute_tracking_pose(
+                        openvr::TrackingUniverseOrigin::Standing,
+                        0.0,
+                    );
+                    let hmd_pose = &poses[0];
+                    if hmd_pose.pose_is_valid() {
+                        let matrix = hmd_pose.device_to_absolute_tracking();
+                        let position = math_utils::position_from_matrix(matrix);
+                        let rotation = math_utils::euler_from_matrix(matrix);
+                        let response = HmdPoseResponse {
+                            msg_type: "hmd_pose",
+                            position: math_utils::round_vec3(&position, 4),
+                            rotation: math_utils::round_vec3(&rotation, 2),
+                        };
+                        json_buf.clear();
+                        if serde_json::to_writer(&mut json_buf, &response).is_ok() {
+                            json_buf.push(b'\n');
+                            let _ = stdout_lock.write_all(&json_buf);
+                            let _ = stdout_lock.flush();
+                        }
+                    } else {
+                        log_stderr("warn", "HMD pose not valid for get_hmd_pose", None);
                     }
                 }
                 Ok(StdinCommand::Exit) => {

@@ -54,7 +54,19 @@ pub enum StdinCommand {
     /// Pause tracking. Sent when Electron detects VRMode=0.
     #[serde(rename = "stop")]
     Stop,
+    /// Return the current HMD world position and rotation (for receive-side calibration).
+    #[serde(rename = "get_hmd_pose")]
+    GetHmdPose,
     /// Graceful shutdown.
     #[serde(rename = "exit")]
     Exit,
+}
+
+/// Response to a `get_hmd_pose` command, written to stdout as JSON.
+#[derive(Debug, Clone, Serialize)]
+pub struct HmdPoseResponse {
+    #[serde(rename = "type")]
+    pub msg_type: &'static str,
+    pub position: [f32; 3],
+    pub rotation: [f32; 3],
 }
