@@ -106,17 +106,17 @@ export class TrackerPipeClient {
   sendTrackers(trackers: TrackerEntry[]): void {
     if (!this._connected || !this.socket) return
 
-    const mapped: { slot: number; position: [number, number, number]; rotation: [number, number, number] }[] = []
+    const mapped: { slot: number; position: [number, number, number]; quaternion: [number, number, number, number] }[] = []
     for (const t of trackers) {
       const slot = addressToSlot(t.address)
       if (slot >= 0 && slot < 9) {
-        mapped.push({ slot, position: t.position, rotation: t.rotation })
+        mapped.push({ slot, position: t.position, quaternion: t.quaternion })
       }
     }
     if (mapped.length === 0) return
 
     const count = mapped.length
-    const buf = Buffer.alloc(4 + count * 25)
+    const buf = Buffer.alloc(4 + count * 29)
 
     // Header
     MAGIC.copy(buf, 0)
@@ -130,9 +130,10 @@ export class TrackerPipeClient {
       buf.writeFloatLE(t.position[0], offset); offset += 4
       buf.writeFloatLE(t.position[1], offset); offset += 4
       buf.writeFloatLE(t.position[2], offset); offset += 4
-      buf.writeFloatLE(t.rotation[0], offset); offset += 4
-      buf.writeFloatLE(t.rotation[1], offset); offset += 4
-      buf.writeFloatLE(t.rotation[2], offset); offset += 4
+      buf.writeFloatLE(t.quaternion[0], offset); offset += 4
+      buf.writeFloatLE(t.quaternion[1], offset); offset += 4
+      buf.writeFloatLE(t.quaternion[2], offset); offset += 4
+      buf.writeFloatLE(t.quaternion[3], offset); offset += 4
     }
 
     this.socket.write(buf)
@@ -147,10 +148,10 @@ export class TrackerPipeClient {
     this.socket.write(buf)
   }
 
-  sendOrigin(position: [number, number, number], rotation: [number, number, number]): void {
+  sendOrigin(position: [number, number, number], quaternion: [number, number, number, number]): void {
     if (!this._connected || !this.socket) return
-    // Header (4 bytes) + 6 floats (24 bytes)
-    const buf = Buffer.alloc(28)
+    // Header (4 bytes) + 7 floats (28 bytes)
+    const buf = Buffer.alloc(32)
     MAGIC.copy(buf, 0)
     buf[2] = MSG_SET_ORIGIN
     buf[3] = 0
@@ -158,9 +159,10 @@ export class TrackerPipeClient {
     buf.writeFloatLE(position[0], offset); offset += 4
     buf.writeFloatLE(position[1], offset); offset += 4
     buf.writeFloatLE(position[2], offset); offset += 4
-    buf.writeFloatLE(rotation[0], offset); offset += 4
-    buf.writeFloatLE(rotation[1], offset); offset += 4
-    buf.writeFloatLE(rotation[2], offset); offset += 4
+    buf.writeFloatLE(quaternion[0], offset); offset += 4
+    buf.writeFloatLE(quaternion[1], offset); offset += 4
+    buf.writeFloatLE(quaternion[2], offset); offset += 4
+    buf.writeFloatLE(quaternion[3], offset); offset += 4
     this.socket.write(buf)
   }
 

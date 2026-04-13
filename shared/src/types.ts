@@ -173,7 +173,7 @@ export interface OutboundRemoteParamEditPayload {
 export interface TrackerEntry {
   address: string
   position: [number, number, number]
-  rotation: [number, number, number]
+  quaternion: [number, number, number, number]
 }
 
 export interface TrackingBatchPayload {

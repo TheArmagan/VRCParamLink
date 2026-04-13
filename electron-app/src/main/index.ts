@@ -14,6 +14,9 @@ import { checkForUpdates } from './lib/auto-updater.ts'
 
 const pipeClient = new TrackerPipeClient()
 
+// Store the latest sender HMD pose for offset calibration
+let lastSenderHmdPose: { position: [number, number, number]; quaternion: [number, number, number, number] } | null = null
+
 const trackerBridge = new TrackerBridge({
   onBatch: (batch) => {
     if (!isTrackingSendEnabled()) return
@@ -102,6 +105,11 @@ const backendClient = new BackendClient({
   },
   onRemoteTrackingBatch: (payload) => {
     if (!isTrackingReceiveEnabled()) return
+    // Capture sender's HMD pose for offset calibration
+    const headTracker = payload.trackers.find((t) => t.address.includes('/head'))
+    if (headTracker) {
+      lastSenderHmdPose = { position: headTracker.position, quaternion: headTracker.quaternion }
+    }
     // Update active receive slots from sender's trackers
     const addresses = payload.trackers.map((t) => t.address)
     updateTrackingReceiveSlots(addresses)
@@ -119,24 +127,74 @@ const backendClient = new BackendClient({
 })
 
 /**
- * Get the local HMD pose via the tracker bridge and send it to the
- * SteamVR driver as the WorldFromDriver origin so that incoming
- * HMD-relative tracking data is correctly placed at the receiver's
- * head position.
+ * Quaternion math helpers for offset computation.
+ * Quaternion format: [w, x, y, z]
+ */
+function quatConjugate(q: [number, number, number, number]): [number, number, number, number] {
+  return [q[0], -q[1], -q[2], -q[3]]
+}
+
+function quatMul(a: [number, number, number, number], b: [number, number, number, number]): [number, number, number, number] {
+  return [
+    a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+    a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+    a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+    a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0]
+  ]
+}
+
+function quatRotateVec3(q: [number, number, number, number], v: [number, number, number]): [number, number, number] {
+  // rotate v by q: q * (0, v) * conjugate(q)
+  const qv: [number, number, number, number] = [0, v[0], v[1], v[2]]
+  const result = quatMul(quatMul(q, qv), quatConjugate(q))
+  return [result[1], result[2], result[3]]
+}
+
+/**
+ * Compute the WorldFromDriver offset transform that maps the sender's
+ * world-space tracking data into the receiver's world space, aligning
+ * the sender's HMD to the receiver's HMD.
+ *
+ * offset_quat = receiver_q * conjugate(sender_q)
+ * offset_pos  = receiver_pos - rotate(offset_quat, sender_pos)
  */
 async function calibrateReceiveOrigin(): Promise<void> {
+  if (!lastSenderHmdPose) {
+    console.warn('[tracking-receive] No sender HMD pose available yet — cannot calibrate')
+    return
+  }
+
   const wasRunning = trackerBridge.isRunning
   if (!wasRunning) {
     trackerBridge.spawn()
   }
 
-  const pose = await trackerBridge.getHmdPose()
-  if (pose) {
-    pipeClient.sendOrigin(pose.position, pose.rotation)
-    console.log('[tracking-receive] Origin calibrated:', pose.position, pose.rotation)
-  } else {
-    console.warn('[tracking-receive] Could not get HMD pose for origin calibration')
+  const receiverPose = await trackerBridge.getHmdPose()
+  if (!receiverPose) {
+    console.warn('[tracking-receive] Could not get local HMD pose for origin calibration')
+    if (!wasRunning && !isTrackingSendEnabled()) {
+      trackerBridge.destroy()
+    }
+    return
   }
+
+  const sQ = lastSenderHmdPose.quaternion
+  const rQ = receiverPose.quaternion
+  const sP = lastSenderHmdPose.position
+  const rP = receiverPose.position
+
+  // offset_quat = receiver_q * conjugate(sender_q)
+  const offsetQ = quatMul(rQ, quatConjugate(sQ))
+  // offset_pos = receiver_pos - rotate(offset_quat, sender_pos)
+  const rotatedSenderPos = quatRotateVec3(offsetQ, sP)
+  const offsetP: [number, number, number] = [
+    rP[0] - rotatedSenderPos[0],
+    rP[1] - rotatedSenderPos[1],
+    rP[2] - rotatedSenderPos[2]
+  ]
+
+  pipeClient.sendOrigin(offsetP, offsetQ)
+  console.log('[tracking-receive] Origin calibrated: pos', offsetP, 'quat', offsetQ)
 
   // If we spawned the bridge only for this query and tracking send is not enabled, stop it
   if (!wasRunning && !isTrackingSendEnabled()) {

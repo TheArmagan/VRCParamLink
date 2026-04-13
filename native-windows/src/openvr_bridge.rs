@@ -1,5 +1,5 @@
 use crate::math_utils;
-use crate::types::{CalibrationSnapshot, DeviceSlot, TrackerBatch, TrackerEntry};
+use crate::types::{DeviceSlot, TrackerBatch, TrackerEntry};
 
 /// Maximum number of OpenVR tracked devices.
 const MAX_DEVICES: usize = openvr::MAX_TRACKED_DEVICE_COUNT;
@@ -29,18 +29,18 @@ pub fn discover_devices(system: &openvr::System) -> Vec<DeviceSlot> {
     }
 
     // Controllers
-    if let Some(left_idx) = system.tracked_device_index_for_controller_role(
-        openvr::TrackedControllerRole::LeftHand,
-    ) {
+    if let Some(left_idx) =
+        system.tracked_device_index_for_controller_role(openvr::TrackedControllerRole::LeftHand)
+    {
         slots.push(DeviceSlot {
             device_index: left_idx,
             osc_address: "/tracking/trackers/1".to_string(),
         });
     }
 
-    if let Some(right_idx) = system.tracked_device_index_for_controller_role(
-        openvr::TrackedControllerRole::RightHand,
-    ) {
+    if let Some(right_idx) =
+        system.tracked_device_index_for_controller_role(openvr::TrackedControllerRole::RightHand)
+    {
         slots.push(DeviceSlot {
             device_index: right_idx,
             osc_address: "/tracking/trackers/2".to_string(),
@@ -70,15 +70,10 @@ pub fn discover_devices(system: &openvr::System) -> Vec<DeviceSlot> {
 }
 
 /// Read current poses for all assigned device slots and produce a TrackerBatch.
-pub fn read_poses(
-    system: &openvr::System,
-    slots: &[DeviceSlot],
-    calibration: &CalibrationSnapshot,
-) -> TrackerBatch {
-    let poses = system.device_to_absolute_tracking_pose(
-        openvr::TrackingUniverseOrigin::Standing,
-        0.0,
-    );
+/// Sends raw world-space positions and quaternion rotations (no calibration).
+pub fn read_poses(system: &openvr::System, slots: &[DeviceSlot]) -> TrackerBatch {
+    let poses =
+        system.device_to_absolute_tracking_pose(openvr::TrackingUniverseOrigin::Standing, 0.0);
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -94,24 +89,18 @@ pub fn read_poses(
         }
 
         let matrix = pose.device_to_absolute_tracking();
-        let raw_pos = math_utils::position_from_matrix(matrix);
-
-        // Apply calibration: transform position relative to calibration HMD
-        let relative_pos = math_utils::vec3_sub(&raw_pos, &calibration.hmd_position);
-        let calibrated_pos = math_utils::mat3_mul_vec3(
-            &calibration.hmd_inv_rotation_matrix,
-            &relative_pos,
-        );
-
-        // Rotation: use quaternion math for correct HMD-relative rotation
-        let raw_quat = math_utils::quat_from_matrix(matrix);
-        let calibrated_quat = math_utils::quat_mul(&calibration.hmd_inv_quaternion, &raw_quat);
-        let calibrated_rot = math_utils::euler_from_quat(&calibrated_quat);
+        let position = math_utils::position_from_matrix(matrix);
+        let quaternion = math_utils::quat_from_matrix(matrix);
 
         trackers.push(TrackerEntry {
             address: slot.osc_address.clone(),
-            position: math_utils::round_vec3(&calibrated_pos, 4),
-            rotation: math_utils::round_vec3(&calibrated_rot, 2),
+            position: math_utils::round_vec3(&position, 4),
+            quaternion: [
+                math_utils::round_f32(quaternion[0], 5),
+                math_utils::round_f32(quaternion[1], 5),
+                math_utils::round_f32(quaternion[2], 5),
+                math_utils::round_f32(quaternion[3], 5),
+            ],
         });
     }
 

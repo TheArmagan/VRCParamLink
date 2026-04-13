@@ -9,10 +9,13 @@
  *     [0x56 0x50]  magic ("VP")
  *     [uint8]      message type: 0x01=pose_update, 0x02=reset_all, 0x03=set_origin
  *     [uint8]      tracker count N (for pose_update only)
- *   Per tracker (25 bytes each, only for type 0x01):
+ *   Per tracker (29 bytes each, only for type 0x01):
  *     [uint8]      slot (0=head, 1-8=body)
  *     [float32×3]  position  (x, y, z)
- *     [float32×3]  rotation  (euler degrees: pitch_x, yaw_y, roll_z)
+ *     [float32×4]  quaternion (w, x, y, z)
+ *   Set origin (28 bytes, only for type 0x03):
+ *     [float32×3]  position  (x, y, z)
+ *     [float32×4]  quaternion (w, x, y, z)
  */
 
 #define WIN32_LEAN_AND_MEAN
@@ -36,7 +39,6 @@ static constexpr uint8_t MSG_POSE_UPDATE = 0x01;
 static constexpr uint8_t MSG_RESET_ALL = 0x02;
 static constexpr uint8_t MSG_SET_ORIGIN = 0x03;
 static constexpr int MAX_TRACKERS = 9; // head + 8 body
-static constexpr float PI = 3.14159265358979323846f;
 static const char *PIPE_NAME = "\\\\.\\pipe\\vrcpl-tracking";
 static const char *SERIAL_PREFIX = "VRCPL_";
 
@@ -56,32 +58,6 @@ static void DriverLog(const char *fmt, ...)
   vsnprintf(buf, sizeof(buf), fmt, ap);
   va_end(ap);
   vr::VRDriverLog()->Log(buf);
-}
-
-/**
- * Convert euler angles (degrees, intrinsic Z-X-Y / Unity convention) to
- * quaternion.  Matches math_utils::euler_from_matrix in the Rust bridge.
- *
- * Intrinsic Z-X-Y  ⇒  Q = Qy · Qx · Qz
- */
-static vr::HmdQuaternion_t EulerToQuat(float pitch_x_deg,
-                                       float yaw_y_deg,
-                                       float roll_z_deg)
-{
-  const float x = pitch_x_deg * (PI / 180.f);
-  const float y = yaw_y_deg * (PI / 180.f);
-  const float z = roll_z_deg * (PI / 180.f);
-
-  const float cx = cosf(x * .5f), sx = sinf(x * .5f);
-  const float cy = cosf(y * .5f), sy = sinf(y * .5f);
-  const float cz = cosf(z * .5f), sz = sinf(z * .5f);
-
-  vr::HmdQuaternion_t q;
-  q.w = cy * cx * cz + sy * sx * sz;
-  q.x = cy * sx * cz + sy * cx * sz;
-  q.y = sy * cx * cz - cy * sx * sz;
-  q.z = cy * cx * sz - sy * sx * cz;
-  return q;
 }
 
 /** Read exactly @p len bytes from the pipe.  Returns false on failure. */
@@ -166,9 +142,13 @@ public:
   // ── Custom ──────────────────────────────────────────────────────────
 
   void UpdatePose(float px, float py, float pz,
-                  float rx, float ry, float rz)
+                  float qw, float qx, float qy, float qz)
   {
-    auto q = EulerToQuat(rx, ry, rz);
+    vr::HmdQuaternion_t q;
+    q.w = qw;
+    q.x = qx;
+    q.y = qy;
+    q.z = qz;
     {
       std::lock_guard<std::mutex> lk(m_mtx);
       m_pose.poseIsValid = true;
@@ -187,9 +167,13 @@ public:
   /** Update the WorldFromDriver transform so that driver (0,0,0) maps to
    *  the receiver's HMD position in world space. */
   void SetOrigin(float ox, float oy, float oz,
-                 float orx, float ory, float orz)
+                 float oqw, float oqx, float oqy, float oqz)
   {
-    auto oq = EulerToQuat(orx, ory, orz);
+    vr::HmdQuaternion_t oq;
+    oq.w = oqw;
+    oq.x = oqx;
+    oq.y = oqy;
+    oq.z = oqz;
     {
       std::lock_guard<std::mutex> lk(m_mtx);
       m_pose.vecWorldFromDriverTranslation[0] = static_cast<double>(ox);
@@ -348,9 +332,9 @@ private:
 
       if (msgType == MSG_POSE_UPDATE && count > 0 && count <= MAX_TRACKERS)
       {
-        // 25 bytes per tracker: 1 slot + 6 floats
-        uint8_t buf[MAX_TRACKERS * 25];
-        const DWORD need = static_cast<DWORD>(count) * 25;
+        // 29 bytes per tracker: 1 slot + 3 pos floats + 4 quat floats
+        uint8_t buf[MAX_TRACKERS * 29];
+        const DWORD need = static_cast<DWORD>(count) * 29;
         if (!ReadExact(pipe, buf, need))
           break;
 
@@ -364,15 +348,15 @@ private:
           off += 1;
           if (slot >= MAX_TRACKERS)
           {
-            off += 24;
+            off += 28;
             continue;
           }
 
-          float v[6];
-          std::memcpy(v, buf + off, 24);
-          off += 24;
+          float v[7];
+          std::memcpy(v, buf + off, 28);
+          off += 28;
           m_devices[slot]->UpdatePose(v[0], v[1], v[2],
-                                      v[3], v[4], v[5]);
+                                      v[3], v[4], v[5], v[6]);
           updated[slot] = true;
         }
 
@@ -389,18 +373,18 @@ private:
       }
       else if (msgType == MSG_SET_ORIGIN)
       {
-        // 24 bytes: 6 floats (px, py, pz, rx, ry, rz)
-        uint8_t buf[24];
-        if (!ReadExact(pipe, buf, 24))
+        // 28 bytes: 7 floats (px, py, pz, qw, qx, qy, qz)
+        uint8_t buf[28];
+        if (!ReadExact(pipe, buf, 28))
           break;
-        float v[6];
-        std::memcpy(v, buf, 24);
+        float v[7];
+        std::memcpy(v, buf, 28);
         // Reset all poses first, then apply new origin
         InvalidateAll();
         for (int i = 0; i < MAX_TRACKERS; i++)
-          m_devices[i]->SetOrigin(v[0], v[1], v[2], v[3], v[4], v[5]);
-        DriverLog("[vrcpl] Origin reset: pos(%.2f, %.2f, %.2f) rot(%.1f, %.1f, %.1f)\n",
-                  v[0], v[1], v[2], v[3], v[4], v[5]);
+          m_devices[i]->SetOrigin(v[0], v[1], v[2], v[3], v[4], v[5], v[6]);
+        DriverLog("[vrcpl] Origin reset: pos(%.2f, %.2f, %.2f) quat(%.3f, %.3f, %.3f, %.3f)\n",
+                  v[0], v[1], v[2], v[3], v[4], v[5], v[6]);
       }
       // Unknown message types are silently ignored
     }

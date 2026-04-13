@@ -1,4 +1,3 @@
-mod calibration;
 mod math_utils;
 mod openvr_bridge;
 mod types;
@@ -118,7 +117,6 @@ fn main() {
 
     let mut tracking_active = false;
     let mut slots = Vec::new();
-    let mut calibration = None;
 
     // ── Step 4: Main loop ──
     loop {
@@ -128,7 +126,7 @@ fn main() {
         loop {
             match cmd_rx.try_recv() {
                 Ok(StdinCommand::Start) => {
-                    // (Re)discover devices and calibrate
+                    // (Re)discover devices and start tracking
                     slots = openvr_bridge::discover_devices(&system);
                     log_stderr(
                         "info",
@@ -143,21 +141,8 @@ fn main() {
                         ),
                         None,
                     );
-
-                    match calibration::calibrate(&system, &slots) {
-                        Some(cal) => {
-                            calibration = Some(cal);
-                            tracking_active = true;
-                            log_stderr("info", "Calibration complete, tracking started", None);
-                        }
-                        None => {
-                            log_stderr(
-                                "warn",
-                                "Calibration failed: no valid device poses",
-                                Some("CALIBRATION_FAILED"),
-                            );
-                        }
-                    }
+                    tracking_active = true;
+                    log_stderr("info", "Tracking started (raw mode)", None);
                 }
                 Ok(StdinCommand::Stop) => {
                     if tracking_active {
@@ -175,11 +160,16 @@ fn main() {
                     if hmd_pose.pose_is_valid() {
                         let matrix = hmd_pose.device_to_absolute_tracking();
                         let position = math_utils::position_from_matrix(matrix);
-                        let rotation = math_utils::euler_from_matrix(matrix);
+                        let quaternion = math_utils::quat_from_matrix(matrix);
                         let response = HmdPoseResponse {
                             msg_type: "hmd_pose",
                             position: math_utils::round_vec3(&position, 4),
-                            rotation: math_utils::round_vec3(&rotation, 2),
+                            quaternion: [
+                                math_utils::round_f32(quaternion[0], 5),
+                                math_utils::round_f32(quaternion[1], 5),
+                                math_utils::round_f32(quaternion[2], 5),
+                                math_utils::round_f32(quaternion[3], 5),
+                            ],
                         };
                         json_buf.clear();
                         if serde_json::to_writer(&mut json_buf, &response).is_ok() {
@@ -206,16 +196,14 @@ fn main() {
 
         // Produce tracking data if active
         if tracking_active {
-            if let Some(ref cal) = calibration {
-                let batch = openvr_bridge::read_poses(&system, &slots, cal);
+            let batch = openvr_bridge::read_poses(&system, &slots);
 
-                if !batch.trackers.is_empty() {
-                    json_buf.clear();
-                    if serde_json::to_writer(&mut json_buf, &batch).is_ok() {
-                        json_buf.push(b'\n');
-                        let _ = stdout_lock.write_all(&json_buf);
-                        let _ = stdout_lock.flush();
-                    }
+            if !batch.trackers.is_empty() {
+                json_buf.clear();
+                if serde_json::to_writer(&mut json_buf, &batch).is_ok() {
+                    json_buf.push(b'\n');
+                    let _ = stdout_lock.write_all(&json_buf);
+                    let _ = stdout_lock.flush();
                 }
             }
         }

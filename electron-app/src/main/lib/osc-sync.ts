@@ -170,12 +170,17 @@ export class OscSyncService {
           { type: 'f', value: tracker.position[2] }
         ]
       })
+      // Convert quaternion [w,x,y,z] to euler for VRChat OSC
+      const [w, x, y, z] = tracker.quaternion
+      const pitchX = Math.asin(Math.max(-1, Math.min(1, 2 * (w * x - y * z)))) * (180 / Math.PI)
+      const yawY = Math.atan2(2 * (x * z + w * y), 1 - 2 * (x * x + y * y)) * (180 / Math.PI)
+      const rollZ = Math.atan2(2 * (x * y + w * z), 1 - 2 * (x * x + z * z)) * (180 / Math.PI)
       this.osc.send({
         address: `${tracker.address}/rotation`,
         args: [
-          { type: 'f', value: tracker.rotation[0] },
-          { type: 'f', value: tracker.rotation[1] },
-          { type: 'f', value: tracker.rotation[2] }
+          { type: 'f', value: pitchX },
+          { type: 'f', value: yawY },
+          { type: 'f', value: rollZ }
         ]
       })
     }

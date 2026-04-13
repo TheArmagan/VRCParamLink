@@ -208,11 +208,11 @@ export function isTrackingBatchPayload(payload: unknown): payload is TrackingBat
       Array.isArray(entry.position) &&
       entry.position.length === 3 &&
       entry.position.every((v: unknown) => typeof v === 'number')
-    const hasValidRotation =
-      Array.isArray(entry.rotation) &&
-      entry.rotation.length === 3 &&
-      entry.rotation.every((v: unknown) => typeof v === 'number')
+    const hasValidQuaternion =
+      Array.isArray(entry.quaternion) &&
+      entry.quaternion.length === 4 &&
+      entry.quaternion.every((v: unknown) => typeof v === 'number')
 
-    return hasValidAddress && hasValidPosition && hasValidRotation
+    return hasValidAddress && hasValidPosition && hasValidQuaternion
   })
 }

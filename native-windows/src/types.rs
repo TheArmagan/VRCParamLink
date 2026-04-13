@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct TrackerEntry {
     pub address: String,
     pub position: [f32; 3],
-    pub rotation: [f32; 3],
+    pub quaternion: [f32; 4],
 }
 
 /// The full JSON batch written to stdout every tick.
@@ -13,19 +13,6 @@ pub struct TrackerEntry {
 pub struct TrackerBatch {
     pub ts: u64,
     pub trackers: Vec<TrackerEntry>,
-}
-
-/// Calibration snapshot: stores the HMD-relative offsets captured at calibration time.
-#[derive(Debug, Clone)]
-pub struct CalibrationSnapshot {
-    /// HMD world position at calibration time.
-    pub hmd_position: [f32; 3],
-    /// HMD world rotation (euler degrees) at calibration time.
-    pub hmd_rotation: [f32; 3],
-    /// HMD inverse rotation matrix (3×3) for transforming positions into HMD-local space.
-    pub hmd_inv_rotation_matrix: [[f32; 3]; 3],
-    /// HMD inverse quaternion for rotating tracker orientations into HMD-local space.
-    pub hmd_inv_quaternion: [f32; 4],
 }
 
 /// Mapping of an OpenVR device index to a VRChat OSC tracker slot.
@@ -70,5 +57,5 @@ pub struct HmdPoseResponse {
     #[serde(rename = "type")]
     pub msg_type: &'static str,
     pub position: [f32; 3],
-    pub rotation: [f32; 3],
+    pub quaternion: [f32; 4],
 }

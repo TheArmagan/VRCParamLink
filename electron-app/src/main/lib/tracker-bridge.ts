@@ -7,7 +7,7 @@ import type { TrackingBatchPayload } from '../../../../shared/src/index.ts'
 
 type HmdPose = {
   position: [number, number, number]
-  rotation: [number, number, number]
+  quaternion: [number, number, number, number]
 }
 
 type TrackerBridgeOptions = {
@@ -52,7 +52,7 @@ export class TrackerBridge {
       try {
         const parsed = JSON.parse(line)
         if (parsed && parsed.type === 'hmd_pose' && this.hmdPoseResolve) {
-          this.hmdPoseResolve({ position: parsed.position, rotation: parsed.rotation })
+          this.hmdPoseResolve({ position: parsed.position, quaternion: parsed.quaternion })
           this.hmdPoseResolve = null
           return
         }
