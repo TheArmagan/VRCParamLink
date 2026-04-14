@@ -151,9 +151,9 @@ fn main() {
                     }
                 }
                 Ok(StdinCommand::GetHmdPose) => {
-                    // Read current HMD pose and write it to stdout
+                    // Read current HMD pose and write it to stdout (raw tracking space)
                     let poses = system.device_to_absolute_tracking_pose(
-                        openvr::TrackingUniverseOrigin::Standing,
+                        openvr::TrackingUniverseOrigin::RawAndUncalibrated,
                         0.0,
                     );
                     let hmd_pose = &poses[0];

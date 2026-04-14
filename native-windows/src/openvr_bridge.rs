@@ -70,10 +70,10 @@ pub fn discover_devices(system: &openvr::System) -> Vec<DeviceSlot> {
 }
 
 /// Read current poses for all assigned device slots and produce a TrackerBatch.
-/// Sends raw world-space positions and quaternion rotations (no calibration).
+/// Sends raw tracking-space positions and quaternion rotations (no calibration).
 pub fn read_poses(system: &openvr::System, slots: &[DeviceSlot]) -> TrackerBatch {
-    let poses =
-        system.device_to_absolute_tracking_pose(openvr::TrackingUniverseOrigin::Standing, 0.0);
+    let poses = system
+        .device_to_absolute_tracking_pose(openvr::TrackingUniverseOrigin::RawAndUncalibrated, 0.0);
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

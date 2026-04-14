@@ -79,7 +79,7 @@
           onclick={() => onToggleTposeMode(!tposeActive)}
         >
           <PersonStanding class="size-3" />
-          {tposeActive ? "T-Pose Active — Waiting..." : "T-Pose Calibrate"}
+          {tposeActive ? "T-Pose Active" : "T-Pose Calibrate"}
         </button>
       {/if}
 

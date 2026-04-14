@@ -154,7 +154,19 @@ const backendClient = new BackendClient({
     // Filter out disabled receive slots (user can toggle head/hands off from UI)
     const disabled = getDisabledReceiveSlotAddresses()
     const filtered = payload.trackers.filter((t) => !disabled.has(t.address))
-    if (filtered.length > 0) {
+    // When T-Pose is active, force virtual trackers into T-Pose shape
+    // instead of relaying the sender's live poses
+    if (isTposeActive() && lastSenderHmdPose) {
+      const tposeAddresses = filtered.map((t) => t.address)
+      const tposeTrackers = generateTposeBatch(
+        lastSenderHmdPose.position,
+        lastSenderHmdPose.quaternion,
+        tposeAddresses
+      )
+      if (tposeTrackers.length > 0) {
+        pipeClient.sendTrackers(tposeTrackers)
+      }
+    } else if (filtered.length > 0) {
       pipeClient.sendTrackers(filtered)
     }
     broadcastAppState()
@@ -195,6 +207,57 @@ function quatYawOnly(q: [number, number, number, number]): [number, number, numb
   const len = Math.sqrt(w * w + y * y)
   if (len < 1e-8) return [1, 0, 0, 0]
   return [w / len, 0, y / len, 0]
+}
+
+/**
+ * Generate a T-Pose set of tracker entries relative to a given HMD pose.
+ * Positions are in world-space (raw tracking). The T-Pose is oriented
+ * along the HMD's yaw so it faces the same direction the sender is looking.
+ *
+ * Layout (all heights relative to HMD Y):
+ *   head  → HMD pos
+ *   1 (left hand)  → 0.7m left, 0.3m below head
+ *   2 (right hand) → 0.7m right, 0.3m below head
+ *   3+ (body)      → hip, feet, etc. — below head on the centerline
+ */
+function generateTposeBatch(
+  hmdPos: [number, number, number],
+  hmdQuat: [number, number, number, number],
+  addresses: string[]
+): { address: string; position: [number, number, number]; quaternion: [number, number, number, number] }[] {
+  const yaw = quatYawOnly(hmdQuat)
+  // Local right (+X) and forward (-Z) in world space via yaw rotation
+  const right = quatRotateVec3(yaw, [1, 0, 0])
+  const identity: [number, number, number, number] = yaw
+
+  const result: { address: string; position: [number, number, number]; quaternion: [number, number, number, number] }[] = []
+
+  for (const addr of addresses) {
+    let pos: [number, number, number]
+    if (addr.includes('/head')) {
+      pos = hmdPos
+    } else if (addr.endsWith('/1')) {
+      // Left hand — 0.7m to the left (negative right), 0.3m below head
+      pos = [
+        hmdPos[0] - right[0] * 0.7,
+        hmdPos[1] - 0.3,
+        hmdPos[2] - right[2] * 0.7
+      ]
+    } else if (addr.endsWith('/2')) {
+      // Right hand — 0.7m to the right, 0.3m below head
+      pos = [
+        hmdPos[0] + right[0] * 0.7,
+        hmdPos[1] - 0.3,
+        hmdPos[2] + right[2] * 0.7
+      ]
+    } else {
+      // Body trackers — centered below head (hip ~0.55m down, waist ~0.45m, etc.)
+      // Since we don't know exact roles, just place them at hip height centered
+      pos = [hmdPos[0], hmdPos[1] - 0.55, hmdPos[2]]
+    }
+    result.push({ address: addr, position: pos, quaternion: identity })
+  }
+  return result
 }
 
 /**
@@ -429,6 +492,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.toggleTposeMode, async (_event, enabled: boolean) => {
     setTposeActive(enabled)
     backendClient.sendTposeSync(enabled)
+    // When deactivating T-Pose locally, calibrate if we're the receiver
+    if (!enabled && isTrackingReceiveEnabled() && lastSenderHmdPose) {
+      await calibrateReceiveOrigin()
+    }
     broadcastAppState()
   })
 

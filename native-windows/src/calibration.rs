@@ -4,8 +4,8 @@ use crate::types::{CalibrationSnapshot, DeviceSlot};
 /// Perform T-Pose calibration by capturing current device positions
 /// relative to the HMD.
 pub fn calibrate(system: &openvr::System, slots: &[DeviceSlot]) -> Option<CalibrationSnapshot> {
-    let poses =
-        system.device_to_absolute_tracking_pose(openvr::TrackingUniverseOrigin::Standing, 0.0);
+    let poses = system
+        .device_to_absolute_tracking_pose(openvr::TrackingUniverseOrigin::RawAndUncalibrated, 0.0);
 
     // HMD is always device index 0
     let hmd_pose = &poses[0];
