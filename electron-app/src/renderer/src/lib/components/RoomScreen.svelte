@@ -32,6 +32,7 @@
     onToggleTrackingSendSlot = (_address: string, _enabled: boolean) => {},
     onToggleTrackingReceiveSlot = (_address: string, _enabled: boolean) => {},
     onToggleTposeMode = (_enabled: boolean) => {},
+    onToggleContinuousCalibration = (_enabled: boolean) => {},
     onEditParam = (_targetSessionId: string, _param: ParamValue) => {},
     onSendAllParams = () => {},
     onSaveRoomSettings = (
@@ -58,6 +59,7 @@
     onToggleTrackingSendSlot?: (address: string, enabled: boolean) => void;
     onToggleTrackingReceiveSlot?: (address: string, enabled: boolean) => void;
     onToggleTposeMode?: (enabled: boolean) => void;
+    onToggleContinuousCalibration?: (enabled: boolean) => void;
     onEditParam?: (targetSessionId: string, param: ParamValue) => void;
     onSendAllParams?: () => void;
     onSaveRoomSettings?: (
@@ -212,6 +214,7 @@
         trackingSendEnabled={appState.trackingSendEnabled}
         trackingReceiveEnabled={appState.trackingReceiveEnabled}
         tposeActive={appState.tposeActive}
+        continuousCalibrationActive={appState.continuousCalibrationActive}
         trackingSendSlots={appState.trackingSendSlots}
         trackingReceiveSlots={appState.trackingReceiveSlots}
         {onToggleTrackingSend}
@@ -220,6 +223,7 @@
         {onToggleTrackingSendSlot}
         {onToggleTrackingReceiveSlot}
         {onToggleTposeMode}
+        {onToggleContinuousCalibration}
       />
     </Card.Content>
   </Card.Root>

@@ -66,6 +66,9 @@ const api: DesktopApi = {
   toggleTposeMode: async (enabled: boolean) => {
     await ipcRenderer.invoke(IPC_CHANNELS.toggleTposeMode, enabled)
   },
+  toggleContinuousCalibration: async (enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleContinuousCalibration, enabled)
+  },
   editParam: async (targetSessionId: string, param: ParamValue) => {
     await ipcRenderer.invoke(IPC_CHANNELS.editParam, targetSessionId, param)
   },

@@ -246,6 +246,7 @@ export interface RendererAppState {
   trackingSendSlots: TrackingSlotState[]
   trackingReceiveSlots: TrackingSlotState[]
   tposeActive: boolean
+  continuousCalibrationActive: boolean
 }
 
 export type AppActionResult =
@@ -271,6 +272,7 @@ export interface DesktopApi {
   toggleTrackingReceive: (enabled: boolean) => Promise<void>
   recalibrateTrackingReceive: () => Promise<void>
   toggleTposeMode: (enabled: boolean) => Promise<void>
+  toggleContinuousCalibration: (enabled: boolean) => Promise<void>
   toggleTrackingSendSlot: (address: string, enabled: boolean) => Promise<void>
   toggleTrackingReceiveSlot: (address: string, enabled: boolean) => Promise<void>
   editParam: (targetSessionId: string, param: ParamValue) => Promise<void>

@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { PersonStanding, ChevronDown, RotateCcw } from "@lucide/svelte";
+  import {
+    PersonStanding,
+    ChevronDown,
+    RotateCcw,
+    RefreshCw,
+  } from "@lucide/svelte";
   import type { TrackingSlotState } from "../../../../../../shared/src/index.ts";
   import { Switch } from "$lib/components/ui/switch/index.js";
   import { Label } from "$lib/components/ui/label/index.js";
@@ -26,6 +31,7 @@
     trackingSendEnabled = false,
     trackingReceiveEnabled = false,
     tposeActive = false,
+    continuousCalibrationActive = false,
     trackingSendSlots = [] as TrackingSlotState[],
     trackingReceiveSlots = [] as TrackingSlotState[],
     onToggleTrackingSend = (_enabled: boolean) => {},
@@ -34,10 +40,12 @@
     onToggleTrackingSendSlot = (_address: string, _enabled: boolean) => {},
     onToggleTrackingReceiveSlot = (_address: string, _enabled: boolean) => {},
     onToggleTposeMode = (_enabled: boolean) => {},
+    onToggleContinuousCalibration = (_enabled: boolean) => {},
   }: {
     trackingSendEnabled?: boolean;
     trackingReceiveEnabled?: boolean;
     tposeActive?: boolean;
+    continuousCalibrationActive?: boolean;
     trackingSendSlots?: TrackingSlotState[];
     trackingReceiveSlots?: TrackingSlotState[];
     onToggleTrackingSend?: (enabled: boolean) => void;
@@ -46,6 +54,7 @@
     onToggleTrackingSendSlot?: (address: string, enabled: boolean) => void;
     onToggleTrackingReceiveSlot?: (address: string, enabled: boolean) => void;
     onToggleTposeMode?: (enabled: boolean) => void;
+    onToggleContinuousCalibration?: (enabled: boolean) => void;
   } = $props();
 
   let open = $state(false);
@@ -134,6 +143,20 @@
         >
           <RotateCcw class="size-3" />
           Recalibrate Position
+        </button>
+
+        <!-- Continuous Calibration Toggle -->
+        <button
+          class="flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors {continuousCalibrationActive
+            ? 'border-blue-500 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
+            : 'border-border bg-background/50 text-muted-foreground hover:bg-muted hover:text-foreground'}"
+          onclick={() =>
+            onToggleContinuousCalibration(!continuousCalibrationActive)}
+        >
+          <RefreshCw class="size-3" />
+          {continuousCalibrationActive
+            ? "Continuous Calibration Active"
+            : "Continuous Calibration"}
         </button>
 
         {#if trackingReceiveSlots.length > 0}

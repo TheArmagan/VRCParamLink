@@ -48,6 +48,7 @@
     trackingSendEnabled: false,
     trackingReceiveEnabled: false,
     tposeActive: false,
+    continuousCalibrationActive: false,
     trackingSendSlots: [],
     trackingReceiveSlots: [],
   });
@@ -240,6 +241,10 @@
     await window.api.toggleTposeMode(enabled);
   }
 
+  async function toggleContinuousCalibration(enabled: boolean): Promise<void> {
+    await window.api.toggleContinuousCalibration(enabled);
+  }
+
   async function editParam(
     targetSessionId: string,
     param: ParamValue,
@@ -285,6 +290,7 @@
         onToggleTrackingSendSlot={toggleTrackingSendSlot}
         onToggleTrackingReceiveSlot={toggleTrackingReceiveSlot}
         onToggleTposeMode={toggleTposeMode}
+        onToggleContinuousCalibration={toggleContinuousCalibration}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

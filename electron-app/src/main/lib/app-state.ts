@@ -64,7 +64,8 @@ const state: RendererAppState = {
   trackingReceiveEnabled: false,
   trackingSendSlots: [],
   trackingReceiveSlots: [],
-  tposeActive: false
+  tposeActive: false,
+  continuousCalibrationActive: false
 }
 
 const syncToggles = new Map<string, boolean>()
@@ -446,6 +447,14 @@ export function setTposeActive(enabled: boolean): void {
 
 export function isTposeActive(): boolean {
   return state.tposeActive
+}
+
+export function setContinuousCalibrationActive(enabled: boolean): void {
+  state.continuousCalibrationActive = enabled
+}
+
+export function isContinuousCalibrationActive(): boolean {
+  return state.continuousCalibrationActive
 }
 
 export function isParamSyncEnabled(path: string): boolean {

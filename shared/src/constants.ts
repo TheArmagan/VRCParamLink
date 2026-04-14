@@ -168,6 +168,7 @@ export const IPC_CHANNELS = {
   toggleTrackingReceive: 'app:toggle-tracking-receive',
   recalibrateTrackingReceive: 'app:recalibrate-tracking-receive',
   toggleTposeMode: 'app:toggle-tpose-mode',
+  toggleContinuousCalibration: 'app:toggle-continuous-calibration',
   toggleTrackingSendSlot: 'app:toggle-tracking-send-slot',
   toggleTrackingReceiveSlot: 'app:toggle-tracking-receive-slot',
   editParam: 'app:edit-param',

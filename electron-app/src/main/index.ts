@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, isTposeActive, setTposeActive, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName, updateTrackingSendSlots, updateTrackingReceiveSlots, toggleTrackingSendSlot, toggleTrackingReceiveSlot, getDisabledSendSlotAddresses, getDisabledReceiveSlotAddresses } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, isTposeActive, setTposeActive, isContinuousCalibrationActive, setContinuousCalibrationActive, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName, updateTrackingSendSlots, updateTrackingReceiveSlots, toggleTrackingSendSlot, toggleTrackingReceiveSlot, getDisabledSendSlotAddresses, getDisabledReceiveSlotAddresses } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { TrackerBridge } from './lib/tracker-bridge.ts'
@@ -132,6 +132,12 @@ const backendClient = new BackendClient({
     const headTracker = payload.trackers.find((t) => t.address.includes('/head'))
     if (headTracker) {
       lastSenderHmdPose = { position: headTracker.position, quaternion: headTracker.quaternion }
+    }
+    // Continuous calibration: re-derive sender yaw conjugate every frame
+    // so origin stays aligned as both users move around
+    if (isContinuousCalibrationActive() && lastSenderHmdPose && lastLocalHmdPose) {
+      const sYaw = quatYawOnly(lastSenderHmdPose.quaternion)
+      calibratedSenderYawConj = quatConjugate(sYaw)
     }
     // Dynamically update WorldFromDriverOffset every frame so body trackers
     // follow the receiver's real-time HMD position as the sender moves
@@ -281,6 +287,20 @@ function generateTposeBatch(
 
   const result: { address: string; position: [number, number, number]; quaternion: [number, number, number, number] }[] = []
 
+  // T-Pose offsets relative to HMD: [rightAxis, down, forwardAxis]
+  // Typical FBT order: 3=waist, 4=left foot, 5=right foot,
+  //                     6=left knee, 7=right knee, 8=chest
+  const bodyOffsets: Record<string, [number, number, number]> = {
+    '/3': [0, 0.65, 0],         // waist — centered, ~0.65m below head
+    '/4': [-0.15, 1.45, 0.05],  // left foot — slightly left, ~1.45m below head
+    '/5': [0.15, 1.45, 0.05],   // right foot — slightly right, ~1.45m below head
+    '/6': [-0.15, 1.05, 0.05],  // left knee — slightly left, ~1.05m below head
+    '/7': [0.15, 1.05, 0.05],   // right knee — slightly right, ~1.05m below head
+    '/8': [0, 0.25, 0]          // chest — centered, ~0.25m below head
+  }
+
+  const fwd = quatRotateVec3(yaw, [0, 0, -1])
+
   for (const addr of addresses) {
     let pos: [number, number, number]
     if (addr.includes('/head')) {
@@ -300,9 +320,14 @@ function generateTposeBatch(
         hmdPos[2] + right[2] * 0.7
       ]
     } else {
-      // Body trackers — centered below head (hip ~0.55m down, waist ~0.45m, etc.)
-      // Since we don't know exact roles, just place them at hip height centered
-      pos = [hmdPos[0], hmdPos[1] - 0.55, hmdPos[2]]
+      // Body trackers — place at anatomically correct T-Pose position
+      const suffix = addr.match(/\/(\d+)$/)?.[0] ?? '/3'
+      const off = bodyOffsets[suffix] ?? [0, 0.65, 0]
+      pos = [
+        hmdPos[0] + right[0] * off[0] + fwd[0] * off[2],
+        hmdPos[1] - off[1],
+        hmdPos[2] + right[2] * off[0] + fwd[2] * off[2]
+      ]
     }
     result.push({ address: addr, position: pos, quaternion: identity })
   }
@@ -525,6 +550,7 @@ function registerIpcHandlers(): void {
       pipeClient.disconnect()
       disableVirtualHmd()
       calibratedSenderYawConj = null
+      setContinuousCalibrationActive(false)
       // Stop bridge if tracking send is also disabled
       if (!isTrackingSendEnabled() && trackerBridge.isRunning) {
         trackerBridge.stopTracking()
@@ -554,6 +580,15 @@ function registerIpcHandlers(): void {
     backendClient.sendTposeSync(enabled)
     // When deactivating T-Pose locally, calibrate if we're the receiver
     if (!enabled && isTrackingReceiveEnabled() && lastSenderHmdPose) {
+      await calibrateReceiveOrigin()
+    }
+    broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.toggleContinuousCalibration, async (_event, enabled: boolean) => {
+    setContinuousCalibrationActive(enabled)
+    // If enabling, do an initial calibration so there's an immediate origin
+    if (enabled && isTrackingReceiveEnabled() && lastSenderHmdPose && pipeClient.isConnected) {
       await calibrateReceiveOrigin()
     }
     broadcastAppState()
