@@ -128,7 +128,6 @@ export class TrackerPipeClient {
       buf.writeFloatLE(t.quaternion[3], offset); offset += 4
       count++
     }
-    if (count === 0) return
 
     // Header
     MAGIC.copy(buf, 0)

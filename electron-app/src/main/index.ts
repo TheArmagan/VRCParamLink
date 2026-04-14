@@ -163,10 +163,34 @@ const backendClient = new BackendClient({
         lastSenderHmdPose.quaternion,
         tposeAddresses
       )
-      if (tposeTrackers.length > 0) {
-        pipeClient.sendTrackers(tposeTrackers)
+      pipeClient.sendTrackers(tposeTrackers)
+    } else {
+      // Apply partial head yaw to body trackers so they slightly follow
+      // the sender's head rotation, making the avatar look more natural
+      if (lastSenderHmdPose) {
+        const headYaw = quatYawOnly(lastSenderHmdPose.quaternion)
+        const partialYaw = quatSlerpFromIdentity(headYaw, BODY_YAW_FOLLOW)
+        const headPos = lastSenderHmdPose.position
+        for (const t of filtered) {
+          // Only affect body trackers (slots 3-8), not head or hands
+          if (t.address.includes('/head') || t.address.endsWith('/1') || t.address.endsWith('/2')) continue
+          // Rotate position around sender's head pivot
+          const rel: [number, number, number] = [
+            t.position[0] - headPos[0],
+            t.position[1] - headPos[1],
+            t.position[2] - headPos[2]
+          ]
+          const rotRel = quatRotateVec3(partialYaw, rel)
+          t.position = [
+            headPos[0] + rotRel[0],
+            headPos[1] + rotRel[1],
+            headPos[2] + rotRel[2]
+          ]
+          // Rotate orientation
+          t.quaternion = quatMul(partialYaw, t.quaternion)
+        }
       }
-    } else if (filtered.length > 0) {
+      // Always send — driver auto-invalidates slots not in the batch
       pipeClient.sendTrackers(filtered)
     }
     broadcastAppStateThrottled()
@@ -208,6 +232,31 @@ function quatYawOnly(q: [number, number, number, number]): [number, number, numb
   if (len < 1e-8) return [1, 0, 0, 0]
   return [w / len, 0, y / len, 0]
 }
+
+/** Spherical linear interpolation between identity quaternion and q by factor t. */
+function quatSlerpFromIdentity(q: [number, number, number, number], t: number): [number, number, number, number] {
+  // slerp(identity, q, t) — identity is [1,0,0,0]
+  let dot = q[0] // dot product with identity = w component
+  const sign = dot < 0 ? -1 : 1
+  dot *= sign
+  if (dot > 0.9995) {
+    // Very close — use normalized lerp
+    const w = 1 - t + t * sign * q[0]
+    const x = t * sign * q[1]
+    const y = t * sign * q[2]
+    const z = t * sign * q[3]
+    const len = Math.sqrt(w * w + x * x + y * y + z * z)
+    return [w / len, x / len, y / len, z / len]
+  }
+  const theta = Math.acos(dot)
+  const sinTheta = Math.sin(theta)
+  const a = Math.sin((1 - t) * theta) / sinTheta
+  const b = Math.sin(t * theta) / sinTheta * sign
+  return [a + b * q[0], b * q[1], b * q[2], b * q[3]]
+}
+
+/** Body yaw follow factor — how much body rotations follow head yaw (0=none, 1=full). */
+const BODY_YAW_FOLLOW = 0.35
 
 /**
  * Generate a T-Pose set of tracker entries relative to a given HMD pose.
