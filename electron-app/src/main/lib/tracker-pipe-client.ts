@@ -23,6 +23,9 @@ export class TrackerPipeClient {
   private shouldBeConnected = false
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private connecting = false
+  // Pre-allocated buffers to avoid GC pressure on the hot path
+  private readonly _poseBuf = Buffer.alloc(4 + 9 * 29) // max 9 trackers
+  private readonly _originBuf = Buffer.alloc(32)
 
   get isConnected(): boolean {
     return this._connected
@@ -107,26 +110,14 @@ export class TrackerPipeClient {
   sendTrackers(trackers: TrackerEntry[]): void {
     if (!this._connected || !this.socket) return
 
-    const mapped: { slot: number; position: [number, number, number]; quaternion: [number, number, number, number] }[] = []
+    // Write directly into pre-allocated buffer, skipping intermediate array
+    const buf = this._poseBuf
+    let count = 0
+    let offset = 4
     for (const t of trackers) {
       const slot = addressToSlot(t.address)
-      if (slot >= 0 && slot < 9) {
-        mapped.push({ slot, position: t.position, quaternion: t.quaternion })
-      }
-    }
-    if (mapped.length === 0) return
-
-    const count = mapped.length
-    const buf = Buffer.alloc(4 + count * 29)
-
-    // Header
-    MAGIC.copy(buf, 0)
-    buf[2] = MSG_POSE_UPDATE
-    buf[3] = count
-
-    let offset = 4
-    for (const t of mapped) {
-      buf[offset] = t.slot
+      if (slot < 0 || slot >= 9) continue
+      buf[offset] = slot
       offset += 1
       buf.writeFloatLE(t.position[0], offset); offset += 4
       buf.writeFloatLE(t.position[1], offset); offset += 4
@@ -135,9 +126,16 @@ export class TrackerPipeClient {
       buf.writeFloatLE(t.quaternion[1], offset); offset += 4
       buf.writeFloatLE(t.quaternion[2], offset); offset += 4
       buf.writeFloatLE(t.quaternion[3], offset); offset += 4
+      count++
     }
+    if (count === 0) return
 
-    this.socket.write(buf)
+    // Header
+    MAGIC.copy(buf, 0)
+    buf[2] = MSG_POSE_UPDATE
+    buf[3] = count
+
+    this.socket.write(buf.subarray(0, 4 + count * 29))
   }
 
   sendReset(): void {
@@ -151,8 +149,7 @@ export class TrackerPipeClient {
 
   sendOrigin(position: [number, number, number], quaternion: [number, number, number, number]): void {
     if (!this._connected || !this.socket) return
-    // Header (4 bytes) + 7 floats (28 bytes)
-    const buf = Buffer.alloc(32)
+    const buf = this._originBuf
     MAGIC.copy(buf, 0)
     buf[2] = MSG_SET_ORIGIN
     buf[3] = 0
@@ -170,7 +167,7 @@ export class TrackerPipeClient {
   /** Update origin without invalidating poses (for per-frame dynamic updates). */
   sendDynamicOrigin(position: [number, number, number], quaternion: [number, number, number, number]): void {
     if (!this._connected || !this.socket) return
-    const buf = Buffer.alloc(32)
+    const buf = this._originBuf
     MAGIC.copy(buf, 0)
     buf[2] = MSG_UPDATE_ORIGIN
     buf[3] = 0

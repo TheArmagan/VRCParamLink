@@ -41,7 +41,7 @@ const trackerBridge = new TrackerBridge({
     const payload: { ts: number; trackers: typeof filtered; tpose?: boolean } = { ts: batch.ts, trackers: filtered }
     if (isTposeActive()) payload.tpose = true
     backendClient.sendTrackingBatch(payload)
-    broadcastAppState()
+    broadcastAppStateThrottled()
   },
   onError: (error) => {
     console.error('[tracker-bridge]', error)
@@ -169,7 +169,7 @@ const backendClient = new BackendClient({
     } else if (filtered.length > 0) {
       pipeClient.sendTrackers(filtered)
     }
-    broadcastAppState()
+    broadcastAppStateThrottled()
   },
   onRoomSnapshot: (snapshot) => {
     oscSync.applySnapshot(snapshot)
@@ -362,6 +362,17 @@ function broadcastAppState(): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(IPC_CHANNELS.stateChanged, nextState)
   }
+}
+
+/** Throttled version of broadcastAppState for high-frequency paths (tracking loops). */
+let _broadcastPending = false
+function broadcastAppStateThrottled(): void {
+  if (_broadcastPending) return
+  _broadcastPending = true
+  setTimeout(() => {
+    _broadcastPending = false
+    broadcastAppState()
+  }, 250)
 }
 
 function registerIpcHandlers(): void {

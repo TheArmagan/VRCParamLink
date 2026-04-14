@@ -1,7 +1,8 @@
-import { app, dialog } from 'electron'
+import { app, dialog, BrowserWindow } from 'electron'
 import { createWriteStream } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { Readable } from 'stream'
 import { pipeline } from 'stream/promises'
 import { spawn } from 'child_process'
 import { net } from 'electron'
@@ -48,7 +49,41 @@ export async function checkForUpdates(): Promise<void> {
 
     const tempPath = join(tmpdir(), exeName)
 
-    await downloadFile(asset.browser_download_url, tempPath)
+    // Show progress window
+    const progressWin = new BrowserWindow({
+      width: 350,
+      height: 120,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      closable: false,
+      frame: false,
+      alwaysOnTop: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true }
+    })
+    progressWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!DOCTYPE html>
+<html><head><style>
+  body{margin:0;padding:16px;font-family:system-ui;background:#1e1e2e;color:#cdd6f4;display:flex;flex-direction:column;justify-content:center;-webkit-app-region:drag}
+  .bar-bg{width:100%;height:18px;background:#313244;border-radius:9px;overflow:hidden}
+  .bar{height:100%;background:#89b4fa;border-radius:9px;transition:width .2s;width:0%}
+  .label{font-size:12px;margin-top:8px;text-align:center;color:#a6adc8}
+</style></head><body>
+  <div style="font-size:14px;margin-bottom:10px;text-align:center">Downloading update...</div>
+  <div class="bar-bg"><div class="bar" id="bar"></div></div>
+  <div class="label" id="label">0%</div>
+</body></html>`)}`)
+
+    try {
+      await downloadFile(asset.browser_download_url, tempPath, (percent) => {
+        if (!progressWin.isDestroyed()) {
+          progressWin.webContents.executeJavaScript(
+            `document.getElementById('bar').style.width='${percent}%';document.getElementById('label').textContent='${percent}%'`
+          ).catch(() => { })
+        }
+      })
+    } finally {
+      if (!progressWin.isDestroyed()) progressWin.close()
+    }
 
     spawn(tempPath, [], { detached: true, stdio: 'ignore' }).unref()
 
@@ -98,7 +133,7 @@ async function fetchLatestRelease(): Promise<GitHubRelease | null> {
   })
 }
 
-async function downloadFile(url: string, dest: string): Promise<void> {
+async function downloadFile(url: string, dest: string, onProgress?: (percent: number) => void): Promise<void> {
   const response = await fetch(url, {
     headers: { 'User-Agent': `vrcpl-app/${app.getVersion()}` },
     redirect: 'follow'
@@ -108,7 +143,25 @@ async function downloadFile(url: string, dest: string): Promise<void> {
     throw new Error(`Download failed: ${response.status}`)
   }
 
+  const totalBytes = parseInt(response.headers.get('content-length') || '0', 10)
+  let receivedBytes = 0
+
+  const reader = response.body.getReader()
+  const nodeStream = new Readable({
+    async read() {
+      const { done, value } = await reader.read()
+      if (done) {
+        this.push(null)
+        return
+      }
+      receivedBytes += value.byteLength
+      if (totalBytes > 0 && onProgress) {
+        onProgress(Math.round((receivedBytes / totalBytes) * 100))
+      }
+      this.push(Buffer.from(value))
+    }
+  })
+
   const fileStream = createWriteStream(dest)
-  // @ts-ignore - ReadableStream to NodeJS.ReadableStream compatibility
-  await pipeline(response.body, fileStream)
+  await pipeline(nodeStream, fileStream)
 }

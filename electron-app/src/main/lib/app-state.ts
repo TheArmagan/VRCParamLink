@@ -386,6 +386,9 @@ export function isTrackingReceiveEnabled(): boolean {
 }
 
 export function updateTrackingSendSlots(addresses: string[]): void {
+  // Skip rebuild if addresses haven't changed
+  if (addresses.length === state.trackingSendSlots.length &&
+    addresses.every((a, i) => a === state.trackingSendSlots[i].address)) return
   const existing = new Map(state.trackingSendSlots.map((s) => [s.address, s.enabled]))
   state.trackingSendSlots = addresses.map((address) => ({
     address,
@@ -397,10 +400,14 @@ export function toggleTrackingSendSlot(address: string, enabled: boolean): void 
   const slot = state.trackingSendSlots.find((s) => s.address === address)
   if (slot) {
     slot.enabled = enabled
+    _cachedDisabledSend = null
   }
 }
 
 export function updateTrackingReceiveSlots(addresses: string[]): void {
+  // Skip rebuild if addresses haven't changed
+  if (addresses.length === state.trackingReceiveSlots.length &&
+    addresses.every((a, i) => a === state.trackingReceiveSlots[i].address)) return
   const existing = new Map(state.trackingReceiveSlots.map((s) => [s.address, s.enabled]))
   state.trackingReceiveSlots = addresses.map((address) => ({
     address,
@@ -412,15 +419,25 @@ export function toggleTrackingReceiveSlot(address: string, enabled: boolean): vo
   const slot = state.trackingReceiveSlots.find((s) => s.address === address)
   if (slot) {
     slot.enabled = enabled
+    _cachedDisabledRecv = null
   }
 }
 
+let _cachedDisabledSend: Set<string> | null = null
+let _cachedDisabledRecv: Set<string> | null = null
+
 export function getDisabledSendSlotAddresses(): Set<string> {
-  return new Set(state.trackingSendSlots.filter((s) => !s.enabled).map((s) => s.address))
+  if (!_cachedDisabledSend) {
+    _cachedDisabledSend = new Set(state.trackingSendSlots.filter((s) => !s.enabled).map((s) => s.address))
+  }
+  return _cachedDisabledSend
 }
 
 export function getDisabledReceiveSlotAddresses(): Set<string> {
-  return new Set(state.trackingReceiveSlots.filter((s) => !s.enabled).map((s) => s.address))
+  if (!_cachedDisabledRecv) {
+    _cachedDisabledRecv = new Set(state.trackingReceiveSlots.filter((s) => !s.enabled).map((s) => s.address))
+  }
+  return _cachedDisabledRecv
 }
 
 export function setTposeActive(enabled: boolean): void {
