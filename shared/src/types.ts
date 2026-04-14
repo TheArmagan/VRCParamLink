@@ -195,6 +195,16 @@ export interface OutboundTrackingBatchPayload {
   tpose?: boolean
 }
 
+export interface TposeSyncPayload {
+  active: boolean
+}
+
+export interface OutboundTposeSyncPayload {
+  roomCode: string
+  sourceSessionId: string
+  active: boolean
+}
+
 export interface ErrorPayload extends ErrorState {
   requestId?: string
 }
@@ -281,6 +291,7 @@ export type ClientToServerMessage =
   | SocketEnvelope<AvatarChangePayload>
   | SocketEnvelope<RemoteParamEditPayload>
   | SocketEnvelope<TrackingBatchPayload>
+  | SocketEnvelope<TposeSyncPayload>
 
 export type ServerToClientMessage =
   | SocketEnvelope<HelloAckPayload>
@@ -295,6 +306,7 @@ export type ServerToClientMessage =
   | SocketEnvelope<AvatarIdUpdatedPayload>
   | SocketEnvelope<OutboundRemoteParamEditPayload>
   | SocketEnvelope<OutboundTrackingBatchPayload>
+  | SocketEnvelope<OutboundTposeSyncPayload>
   | SocketEnvelope<ErrorPayload>
 
 export type TypedClientEvent = ClientEventType

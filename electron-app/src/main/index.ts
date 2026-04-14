@@ -17,8 +17,19 @@ const pipeClient = new TrackerPipeClient()
 // Store the latest sender HMD pose for offset calibration
 let lastSenderHmdPose: { position: [number, number, number]; quaternion: [number, number, number, number] } | null = null
 
+// Receiver's live HMD pose, updated every frame from the local tracker bridge
+let lastLocalHmdPose: { position: [number, number, number]; quaternion: [number, number, number, number] } | null = null
+
+// Persistent calibration state for dynamic per-frame origin updates
+let calibratedSenderYawConj: [number, number, number, number] | null = null
+
 const trackerBridge = new TrackerBridge({
   onBatch: (batch) => {
+    // Always capture local HMD pose for receiver dynamic origin
+    const localHead = batch.trackers.find((t) => t.address.includes('/head'))
+    if (localHead) {
+      lastLocalHmdPose = { position: localHead.position, quaternion: localHead.quaternion }
+    }
     if (!isTrackingSendEnabled()) return
     // Update active send slots from discovered trackers
     const addresses = batch.trackers.map((t) => t.address)
@@ -76,18 +87,6 @@ const oscSync = new OscSyncService({
     broadcastAppState()
   },
   onVRTrackingDetected: () => {
-    // Deactivate T-Pose mode on VR tracking detection
-    if (isTposeActive()) {
-      setTposeActive(false)
-      // If receiving, calibrate origin at T-Pose moment
-      if (isTrackingReceiveEnabled() && pipeClient.isConnected && lastSenderHmdPose) {
-        calibrateReceiveOrigin().then(() => {
-          console.log('[tracking-receive] T-Pose calibration complete (VR detected)')
-          broadcastAppState()
-        })
-      }
-      broadcastAppState()
-    }
     if (!isTrackingSendEnabled()) return
     if (!trackerBridge.isRunning) {
       trackerBridge.spawn()
@@ -117,6 +116,16 @@ const backendClient = new BackendClient({
       }
     }
   },
+  onRemoteTposeSync: (payload) => {
+    setTposeActive(payload.active)
+    if (!payload.active && isTrackingReceiveEnabled() && lastSenderHmdPose) {
+      calibrateReceiveOrigin().then(() => {
+        broadcastAppState()
+        console.log('[tracking-receive] T-Pose remote deactivation – calibrated')
+      })
+    }
+    broadcastAppState()
+  },
   onRemoteTrackingBatch: (payload) => {
     if (!isTrackingReceiveEnabled()) return
     // Capture sender's HMD pose for offset calibration
@@ -124,10 +133,25 @@ const backendClient = new BackendClient({
     if (headTracker) {
       lastSenderHmdPose = { position: headTracker.position, quaternion: headTracker.quaternion }
     }
-    // Update active receive slots from sender's trackers
+    // Dynamically update WorldFromDriverOffset every frame so body trackers
+    // follow the receiver's real-time HMD position as the sender moves
+    if (calibratedSenderYawConj && lastSenderHmdPose && lastLocalHmdPose) {
+      const rYaw = quatYawOnly(lastLocalHmdPose.quaternion)
+      const dynamicOffsetQ = quatMul(rYaw, calibratedSenderYawConj)
+      const sP = lastSenderHmdPose.position
+      const rP = lastLocalHmdPose.position
+      const rotated = quatRotateVec3(dynamicOffsetQ, sP)
+      const dynamicP: [number, number, number] = [
+        rP[0] - rotated[0],
+        rP[1] - rotated[1],
+        rP[2] - rotated[2]
+      ]
+      pipeClient.sendDynamicOrigin(dynamicP, dynamicOffsetQ)
+    }
+    // Update active receive slots from all sender trackers
     const addresses = payload.trackers.map((t) => t.address)
     updateTrackingReceiveSlots(addresses)
-    // Filter out disabled receive slots
+    // Filter out disabled receive slots (user can toggle head/hands off from UI)
     const disabled = getDisabledReceiveSlotAddresses()
     const filtered = payload.trackers.filter((t) => !disabled.has(t.address))
     if (filtered.length > 0) {
@@ -209,8 +233,11 @@ async function calibrateReceiveOrigin(): Promise<void> {
   const sP = lastSenderHmdPose.position
   const rP = receiverPose.position
 
+  // Store sender's calibration yaw conjugate for per-frame dynamic updates
+  calibratedSenderYawConj = quatConjugate(sYaw)
+
   // yaw_offset = receiver_yaw * conjugate(sender_yaw)
-  const offsetQ = quatMul(rYaw, quatConjugate(sYaw))
+  const offsetQ = quatMul(rYaw, calibratedSenderYawConj)
   // offset_pos = receiver_pos - rotate(yaw_offset, sender_pos)
   const rotatedSenderPos = quatRotateVec3(offsetQ, sP)
   const offsetP: [number, number, number] = [
@@ -353,6 +380,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.toggleTrackingReceive, async (_event, enabled: boolean) => {
     setTrackingReceiveEnabled(enabled)
     if (enabled) {
+      // Ensure bridge is running so we get live local HMD pose
+      if (!trackerBridge.isRunning) {
+        trackerBridge.spawn()
+      }
+      trackerBridge.startTracking()
       const hmdResult = ensureVirtualHmdForReceive()
       if (hmdResult.error) {
         console.error('[virtual-hmd]', hmdResult.error)
@@ -369,6 +401,11 @@ function registerIpcHandlers(): void {
     } else {
       pipeClient.disconnect()
       disableVirtualHmd()
+      calibratedSenderYawConj = null
+      // Stop bridge if tracking send is also disabled
+      if (!isTrackingSendEnabled() && trackerBridge.isRunning) {
+        trackerBridge.stopTracking()
+      }
     }
     broadcastAppState()
   })
@@ -391,6 +428,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.toggleTposeMode, async (_event, enabled: boolean) => {
     setTposeActive(enabled)
+    backendClient.sendTposeSync(enabled)
     broadcastAppState()
   })
 

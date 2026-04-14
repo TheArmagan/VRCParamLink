@@ -7,7 +7,7 @@
  * Binary pipe protocol (little-endian):
  *   Header (4 bytes):
  *     [0x56 0x50]  magic ("VP")
- *     [uint8]      message type: 0x01=pose_update, 0x02=reset_all, 0x03=set_origin
+ *     [uint8]      message type: 0x01=pose_update, 0x02=reset_all, 0x03=set_origin, 0x04=update_origin
  *     [uint8]      tracker count N (for pose_update only)
  *   Per tracker (29 bytes each, only for type 0x01):
  *     [uint8]      slot (0=head, 1-8=body)
@@ -38,6 +38,7 @@ static constexpr uint8_t MAGIC[2] = {0x56, 0x50};
 static constexpr uint8_t MSG_POSE_UPDATE = 0x01;
 static constexpr uint8_t MSG_RESET_ALL = 0x02;
 static constexpr uint8_t MSG_SET_ORIGIN = 0x03;
+static constexpr uint8_t MSG_UPDATE_ORIGIN = 0x04;
 static constexpr int MAX_TRACKERS = 9; // head + 8 body
 static const char *PIPE_NAME = "\\\\.\\pipe\\vrcpl-tracking";
 static const char *SERIAL_PREFIX = "VRCPL_";
@@ -385,6 +386,18 @@ private:
           m_devices[i]->SetOrigin(v[0], v[1], v[2], v[3], v[4], v[5], v[6]);
         DriverLog("[vrcpl] Origin reset: pos(%.2f, %.2f, %.2f) quat(%.3f, %.3f, %.3f, %.3f)\n",
                   v[0], v[1], v[2], v[3], v[4], v[5], v[6]);
+      }
+      else if (msgType == MSG_UPDATE_ORIGIN)
+      {
+        // 28 bytes: 7 floats (px, py, pz, qw, qx, qy, qz)
+        // Same as SET_ORIGIN but does NOT invalidate poses (for per-frame updates)
+        uint8_t buf[28];
+        if (!ReadExact(pipe, buf, 28))
+          break;
+        float v[7];
+        std::memcpy(v, buf, 28);
+        for (int i = 0; i < MAX_TRACKERS; i++)
+          m_devices[i]->SetOrigin(v[0], v[1], v[2], v[3], v[4], v[5], v[6]);
       }
       // Unknown message types are silently ignored
     }

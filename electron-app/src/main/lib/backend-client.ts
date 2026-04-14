@@ -13,6 +13,7 @@ import {
   type HelloAckPayload,
   type OutboundRemoteParamEditPayload,
   type OutboundTrackingBatchPayload,
+  type OutboundTposeSyncPayload,
   type OwnerChangedPayload,
   type OutboundParamBatchPayload,
   type ParamValue,
@@ -53,6 +54,7 @@ type BackendClientOptions = {
   onRemoteParamBatch?: (payload: OutboundParamBatchPayload) => void
   onRemoteParamEdit?: (payload: OutboundRemoteParamEditPayload) => void
   onRemoteTrackingBatch?: (payload: OutboundTrackingBatchPayload) => void
+  onRemoteTposeSync?: (payload: OutboundTposeSyncPayload) => void
   onRoomSnapshot?: (snapshot: ParamValue[]) => void
 }
 
@@ -153,6 +155,19 @@ export class BackendClient {
     }
 
     this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.trackingBatch, batch)))
+  }
+
+  sendTposeSync(active: boolean): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    const state = getAppState()
+    if (!state.roomCode) {
+      return
+    }
+
+    this.socket.send(JSON.stringify(createEnvelope(CLIENT_EVENT_TYPES.tposeSync, { active })))
   }
 
   async ensureConnected(displayName: string): Promise<AppActionResult> {
@@ -304,6 +319,9 @@ export class BackendClient {
       }
       case SERVER_EVENT_TYPES.trackingBatch:
         this.options.onRemoteTrackingBatch?.(envelope.payload as OutboundTrackingBatchPayload)
+        break
+      case SERVER_EVENT_TYPES.tposeSync:
+        this.options.onRemoteTposeSync?.(envelope.payload as OutboundTposeSyncPayload)
         break
       case SERVER_EVENT_TYPES.error:
         setErrorState(envelope.payload as ErrorPayload)

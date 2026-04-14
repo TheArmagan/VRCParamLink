@@ -10,7 +10,8 @@ export const CLIENT_EVENT_TYPES = {
   heartbeat: 'heartbeat',
   avatarChange: 'avatar_change',
   remoteParamEdit: 'remote_param_edit',
-  trackingBatch: 'tracking_batch'
+  trackingBatch: 'tracking_batch',
+  tposeSync: 'tpose_sync'
 } as const
 
 export const SERVER_EVENT_TYPES = {
@@ -26,6 +27,7 @@ export const SERVER_EVENT_TYPES = {
   avatarIdUpdated: 'avatar_id_updated',
   remoteParamEdit: 'remote_param_edit',
   trackingBatch: 'tracking_batch',
+  tposeSync: 'tpose_sync',
   error: 'error'
 } as const
 

@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 
 use types::{HmdPoseResponse, LogEntry, StdinCommand};
 
-/// Tick interval for the tracking loop (50ms = 20 Hz).
-const TICK_INTERVAL: Duration = Duration::from_millis(50);
+/// Tick interval for the tracking loop (~33ms = 30 Hz).
+const TICK_INTERVAL: Duration = Duration::from_millis(33);
 
 fn log_stderr(level: &'static str, msg: impl Into<String>, code: Option<&'static str>) {
     let entry = LogEntry {

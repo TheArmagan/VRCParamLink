@@ -216,3 +216,7 @@ export function isTrackingBatchPayload(payload: unknown): payload is TrackingBat
     return hasValidAddress && hasValidPosition && hasValidQuaternion
   })
 }
+
+export function isTposeSyncPayload(payload: unknown): payload is { active: boolean } {
+  return isPlainObject(payload) && typeof payload.active === 'boolean'
+}

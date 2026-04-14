@@ -23,6 +23,7 @@ import {
 	isSetDisplayNamePayload,
 	isSetRoomSettingsPayload,
 	isTrackingBatchPayload,
+	isTposeSyncPayload,
 	parseSocketEnvelope
 } from './protocol.ts'
 import { broadcastToRoom, handleDomainError, sendEnvelope, sendError } from './ws-messaging.ts'
@@ -66,6 +67,9 @@ export function createSocketHandlers(registry: SocketRegistry) {
 				break
 			case CLIENT_EVENT_TYPES.trackingBatch:
 				await handleTrackingBatch(ws, envelope)
+				break
+			case CLIENT_EVENT_TYPES.tposeSync:
+				await handleTposeSync(ws, envelope)
 				break
 			case CLIENT_EVENT_TYPES.heartbeat:
 				handleHeartbeat(ws, envelope)
@@ -405,6 +409,29 @@ export function createSocketHandlers(registry: SocketRegistry) {
 			registry,
 			ws.data.roomCode,
 			createEnvelope(SERVER_EVENT_TYPES.trackingBatch, outbound),
+			ws.data.sessionId
+		)
+	}
+
+	async function handleTposeSync(ws: ServerWebSocket<ConnectionContext>, envelope: ParsedSocketEnvelope): Promise<void> {
+		if (!isTposeSyncPayload(envelope.payload)) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'Invalid tpose_sync payload.', envelope.requestId)
+			return
+		}
+
+		if (!ws.data.sessionId || !ws.data.roomCode) {
+			sendError(ws, ERROR_CODES.invalidMessage, 'No active session or room found.', envelope.requestId)
+			return
+		}
+
+		await broadcastToRoom(
+			registry,
+			ws.data.roomCode,
+			createEnvelope(SERVER_EVENT_TYPES.tposeSync, {
+				roomCode: ws.data.roomCode,
+				sourceSessionId: ws.data.sessionId,
+				active: envelope.payload.active
+			}),
 			ws.data.sessionId
 		)
 	}

@@ -6,6 +6,7 @@ const MAGIC = Buffer.from([0x56, 0x50])
 const MSG_POSE_UPDATE = 0x01
 const MSG_RESET_ALL = 0x02
 const MSG_SET_ORIGIN = 0x03
+const MSG_UPDATE_ORIGIN = 0x04
 const RECONNECT_INTERVAL_MS = 2_000
 const INITIAL_RETRY_INTERVAL_MS = 500
 const INITIAL_RETRY_MAX_ATTEMPTS = 30
@@ -154,6 +155,24 @@ export class TrackerPipeClient {
     const buf = Buffer.alloc(32)
     MAGIC.copy(buf, 0)
     buf[2] = MSG_SET_ORIGIN
+    buf[3] = 0
+    let offset = 4
+    buf.writeFloatLE(position[0], offset); offset += 4
+    buf.writeFloatLE(position[1], offset); offset += 4
+    buf.writeFloatLE(position[2], offset); offset += 4
+    buf.writeFloatLE(quaternion[0], offset); offset += 4
+    buf.writeFloatLE(quaternion[1], offset); offset += 4
+    buf.writeFloatLE(quaternion[2], offset); offset += 4
+    buf.writeFloatLE(quaternion[3], offset); offset += 4
+    this.socket.write(buf)
+  }
+
+  /** Update origin without invalidating poses (for per-frame dynamic updates). */
+  sendDynamicOrigin(position: [number, number, number], quaternion: [number, number, number, number]): void {
+    if (!this._connected || !this.socket) return
+    const buf = Buffer.alloc(32)
+    MAGIC.copy(buf, 0)
+    buf[2] = MSG_UPDATE_ORIGIN
     buf[3] = 0
     let offset = 4
     buf.writeFloatLE(position[0], offset); offset += 4
