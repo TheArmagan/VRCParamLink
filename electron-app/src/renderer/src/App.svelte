@@ -47,6 +47,7 @@
     inputReceiveEnabled: false,
     trackingSendEnabled: false,
     trackingReceiveEnabled: false,
+    tposeActive: false,
     trackingSendSlots: [],
     trackingReceiveSlots: [],
   });
@@ -235,6 +236,10 @@
     await window.api.toggleTrackingReceiveSlot(address, enabled);
   }
 
+  async function toggleTposeMode(enabled: boolean): Promise<void> {
+    await window.api.toggleTposeMode(enabled);
+  }
+
   async function editParam(
     targetSessionId: string,
     param: ParamValue,
@@ -279,6 +284,7 @@
         onRecalibrateTrackingReceive={recalibrateTrackingReceive}
         onToggleTrackingSendSlot={toggleTrackingSendSlot}
         onToggleTrackingReceiveSlot={toggleTrackingReceiveSlot}
+        onToggleTposeMode={toggleTposeMode}
         onEditParam={editParam}
         onSendAllParams={sendAllParams}
         onSaveRoomSettings={saveRoomSettings}

@@ -25,6 +25,7 @@
   let {
     trackingSendEnabled = false,
     trackingReceiveEnabled = false,
+    tposeActive = false,
     trackingSendSlots = [] as TrackingSlotState[],
     trackingReceiveSlots = [] as TrackingSlotState[],
     onToggleTrackingSend = (_enabled: boolean) => {},
@@ -32,9 +33,11 @@
     onRecalibrateTrackingReceive = () => {},
     onToggleTrackingSendSlot = (_address: string, _enabled: boolean) => {},
     onToggleTrackingReceiveSlot = (_address: string, _enabled: boolean) => {},
+    onToggleTposeMode = (_enabled: boolean) => {},
   }: {
     trackingSendEnabled?: boolean;
     trackingReceiveEnabled?: boolean;
+    tposeActive?: boolean;
     trackingSendSlots?: TrackingSlotState[];
     trackingReceiveSlots?: TrackingSlotState[];
     onToggleTrackingSend?: (enabled: boolean) => void;
@@ -42,6 +45,7 @@
     onRecalibrateTrackingReceive?: () => void;
     onToggleTrackingSendSlot?: (address: string, enabled: boolean) => void;
     onToggleTrackingReceiveSlot?: (address: string, enabled: boolean) => void;
+    onToggleTposeMode?: (enabled: boolean) => void;
   } = $props();
 
   let open = $state(false);
@@ -66,6 +70,18 @@
       <p class="text-[11px] text-muted-foreground">
         Sync full-body tracking data between room members via OpenVR
       </p>
+
+      {#if trackingSendEnabled || trackingReceiveEnabled}
+        <button
+          class="flex w-full items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors {tposeActive
+            ? 'border-green-500 bg-green-500/20 text-green-400 hover:bg-green-500/30'
+            : 'border-border bg-background/50 text-muted-foreground hover:bg-muted hover:text-foreground'}"
+          onclick={() => onToggleTposeMode(!tposeActive)}
+        >
+          <PersonStanding class="size-3" />
+          {tposeActive ? "T-Pose Active — Waiting..." : "T-Pose Calibrate"}
+        </button>
+      {/if}
 
       <!-- Send My Tracking -->
       <div

@@ -63,6 +63,9 @@ const api: DesktopApi = {
   toggleTrackingReceiveSlot: async (address: string, enabled: boolean) => {
     await ipcRenderer.invoke(IPC_CHANNELS.toggleTrackingReceiveSlot, address, enabled)
   },
+  toggleTposeMode: async (enabled: boolean) => {
+    await ipcRenderer.invoke(IPC_CHANNELS.toggleTposeMode, enabled)
+  },
   editParam: async (targetSessionId: string, param: ParamValue) => {
     await ipcRenderer.invoke(IPC_CHANNELS.editParam, targetSessionId, param)
   },

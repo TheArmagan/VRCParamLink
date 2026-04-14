@@ -179,6 +179,7 @@ export interface TrackerEntry {
 export interface TrackingBatchPayload {
   ts: number
   trackers: TrackerEntry[]
+  tpose?: boolean
 }
 
 export interface TrackingSlotState {
@@ -191,6 +192,7 @@ export interface OutboundTrackingBatchPayload {
   sourceSessionId: string
   ts: number
   trackers: TrackerEntry[]
+  tpose?: boolean
 }
 
 export interface ErrorPayload extends ErrorState {
@@ -233,6 +235,7 @@ export interface RendererAppState {
   trackingReceiveEnabled: boolean
   trackingSendSlots: TrackingSlotState[]
   trackingReceiveSlots: TrackingSlotState[]
+  tposeActive: boolean
 }
 
 export type AppActionResult =
@@ -257,6 +260,7 @@ export interface DesktopApi {
   toggleTrackingSend: (enabled: boolean) => Promise<void>
   toggleTrackingReceive: (enabled: boolean) => Promise<void>
   recalibrateTrackingReceive: () => Promise<void>
+  toggleTposeMode: (enabled: boolean) => Promise<void>
   toggleTrackingSendSlot: (address: string, enabled: boolean) => Promise<void>
   toggleTrackingReceiveSlot: (address: string, enabled: boolean) => Promise<void>
   editParam: (targetSessionId: string, param: ParamValue) => Promise<void>

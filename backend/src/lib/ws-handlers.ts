@@ -397,7 +397,8 @@ export function createSocketHandlers(registry: SocketRegistry) {
 			roomCode: ws.data.roomCode,
 			sourceSessionId: ws.data.sessionId,
 			ts: envelope.payload.ts,
-			trackers: envelope.payload.trackers
+			trackers: envelope.payload.trackers,
+			...(envelope.payload.tpose ? { tpose: true } : {})
 		}
 
 		await broadcastToRoom(

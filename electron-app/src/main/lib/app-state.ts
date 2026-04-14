@@ -63,7 +63,8 @@ const state: RendererAppState = {
   trackingSendEnabled: false,
   trackingReceiveEnabled: false,
   trackingSendSlots: [],
-  trackingReceiveSlots: []
+  trackingReceiveSlots: [],
+  tposeActive: false
 }
 
 const syncToggles = new Map<string, boolean>()
@@ -420,6 +421,14 @@ export function getDisabledSendSlotAddresses(): Set<string> {
 
 export function getDisabledReceiveSlotAddresses(): Set<string> {
   return new Set(state.trackingReceiveSlots.filter((s) => !s.enabled).map((s) => s.address))
+}
+
+export function setTposeActive(enabled: boolean): void {
+  state.tposeActive = enabled
+}
+
+export function isTposeActive(): boolean {
+  return state.tposeActive
 }
 
 export function isParamSyncEnabled(path: string): boolean {

@@ -3,7 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC_CHANNELS, type ParamValue } from '../../../shared/src/index.ts'
-import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName, updateTrackingSendSlots, updateTrackingReceiveSlots, toggleTrackingSendSlot, toggleTrackingReceiveSlot, getDisabledSendSlotAddresses, getDisabledReceiveSlotAddresses } from './lib/app-state.ts'
+import { applySelfAvatarChange, getAppState, isInputSendEnabled, isInputReceiveEnabled, isTrackingSendEnabled, isTrackingReceiveEnabled, isTposeActive, setTposeActive, passesFilter, setAppVersion, setInputSendEnabled, setInputReceiveEnabled, setParamSyncEnabled, setLocalPlaybackEnabled, setTrackingSendEnabled, setTrackingReceiveEnabled, updateDisplayName, updateTrackingSendSlots, updateTrackingReceiveSlots, toggleTrackingSendSlot, toggleTrackingReceiveSlot, getDisabledSendSlotAddresses, getDisabledReceiveSlotAddresses } from './lib/app-state.ts'
 import { BackendClient } from './lib/backend-client.ts'
 import { OscSyncService } from './lib/osc-sync.ts'
 import { TrackerBridge } from './lib/tracker-bridge.ts'
@@ -27,7 +27,9 @@ const trackerBridge = new TrackerBridge({
     const disabled = getDisabledSendSlotAddresses()
     const filtered = batch.trackers.filter((t) => !disabled.has(t.address))
     if (filtered.length === 0) return
-    backendClient.sendTrackingBatch({ ts: batch.ts, trackers: filtered })
+    const payload: { ts: number; trackers: typeof filtered; tpose?: boolean } = { ts: batch.ts, trackers: filtered }
+    if (isTposeActive()) payload.tpose = true
+    backendClient.sendTrackingBatch(payload)
     broadcastAppState()
   },
   onError: (error) => {
@@ -74,6 +76,18 @@ const oscSync = new OscSyncService({
     broadcastAppState()
   },
   onVRTrackingDetected: () => {
+    // Deactivate T-Pose mode on VR tracking detection
+    if (isTposeActive()) {
+      setTposeActive(false)
+      // If receiving, calibrate origin at T-Pose moment
+      if (isTrackingReceiveEnabled() && pipeClient.isConnected && lastSenderHmdPose) {
+        calibrateReceiveOrigin().then(() => {
+          console.log('[tracking-receive] T-Pose calibration complete (VR detected)')
+          broadcastAppState()
+        })
+      }
+      broadcastAppState()
+    }
     if (!isTrackingSendEnabled()) return
     if (!trackerBridge.isRunning) {
       trackerBridge.spawn()
@@ -144,19 +158,31 @@ function quatMul(a: [number, number, number, number], b: [number, number, number
 }
 
 function quatRotateVec3(q: [number, number, number, number], v: [number, number, number]): [number, number, number] {
-  // rotate v by q: q * (0, v) * conjugate(q)
   const qv: [number, number, number, number] = [0, v[0], v[1], v[2]]
   const result = quatMul(quatMul(q, qv), quatConjugate(q))
   return [result[1], result[2], result[3]]
 }
 
+/** Extract yaw-only (Y-axis rotation) from a quaternion, discarding pitch/roll. */
+function quatYawOnly(q: [number, number, number, number]): [number, number, number, number] {
+  // Yaw angle from quaternion: atan2(2(wy + xz), 1 - 2(y² + x²))
+  // But simpler: just keep the Y component and re-normalize
+  const [w, _x, y, _z] = q
+  const len = Math.sqrt(w * w + y * y)
+  if (len < 1e-8) return [1, 0, 0, 0]
+  return [w / len, 0, y / len, 0]
+}
+
 /**
  * Compute the WorldFromDriver offset transform that maps the sender's
- * world-space tracking data into the receiver's world space, aligning
- * the sender's HMD to the receiver's HMD.
+ * world-space tracking data into the receiver's world space.
  *
- * offset_quat = receiver_q * conjugate(sender_q)
- * offset_pos  = receiver_pos - rotate(offset_quat, sender_pos)
+ * Only the yaw (Y-axis) component of each HMD's rotation is used so
+ * the body stays upright — pitch/roll from looking up/down doesn't
+ * tilt the entire body.
+ *
+ * yaw_offset = yaw(receiver_q) * conjugate(yaw(sender_q))
+ * offset_pos = receiver_pos - rotate(yaw_offset, sender_pos)
  */
 async function calibrateReceiveOrigin(): Promise<void> {
   if (!lastSenderHmdPose) {
@@ -178,14 +204,14 @@ async function calibrateReceiveOrigin(): Promise<void> {
     return
   }
 
-  const sQ = lastSenderHmdPose.quaternion
-  const rQ = receiverPose.quaternion
+  const sYaw = quatYawOnly(lastSenderHmdPose.quaternion)
+  const rYaw = quatYawOnly(receiverPose.quaternion)
   const sP = lastSenderHmdPose.position
   const rP = receiverPose.position
 
-  // offset_quat = receiver_q * conjugate(sender_q)
-  const offsetQ = quatMul(rQ, quatConjugate(sQ))
-  // offset_pos = receiver_pos - rotate(offset_quat, sender_pos)
+  // yaw_offset = receiver_yaw * conjugate(sender_yaw)
+  const offsetQ = quatMul(rYaw, quatConjugate(sYaw))
+  // offset_pos = receiver_pos - rotate(yaw_offset, sender_pos)
   const rotatedSenderPos = quatRotateVec3(offsetQ, sP)
   const offsetP: [number, number, number] = [
     rP[0] - rotatedSenderPos[0],
@@ -194,7 +220,7 @@ async function calibrateReceiveOrigin(): Promise<void> {
   ]
 
   pipeClient.sendOrigin(offsetP, offsetQ)
-  console.log('[tracking-receive] Origin calibrated: pos', offsetP, 'quat', offsetQ)
+  console.log('[tracking-receive] Origin calibrated (yaw-only): pos', offsetP, 'quat', offsetQ)
 
   // If we spawned the bridge only for this query and tracking send is not enabled, stop it
   if (!wasRunning && !isTrackingSendEnabled()) {
@@ -360,6 +386,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.toggleTrackingReceiveSlot, async (_event, address: string, enabled: boolean) => {
     toggleTrackingReceiveSlot(address, enabled)
+    broadcastAppState()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.toggleTposeMode, async (_event, enabled: boolean) => {
+    setTposeActive(enabled)
     broadcastAppState()
   })
 
