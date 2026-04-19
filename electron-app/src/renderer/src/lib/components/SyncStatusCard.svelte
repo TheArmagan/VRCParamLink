@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { ArrowDownLeft, ArrowUpRight, Activity } from "@lucide/svelte";
+  import {
+    ArrowDownLeft,
+    ArrowUpRight,
+    Activity,
+    UserPen,
+  } from "@lucide/svelte";
   import { Badge } from "$lib/components/ui/badge/index.js";
   import type { RendererAppState } from "../../../../../../shared/src/index.ts";
 
@@ -13,7 +18,7 @@
     if (!state.selfAvatarId || !state.ownerAvatarId) {
       return { label: "Waiting for avatar", variant: "secondary" as const };
     }
-    if (state.avatarSyncActive) {
+    if (state.avatarSyncActive && state.selfAvatarId === state.ownerAvatarId) {
       return { label: "Avatar Matched", variant: "default" as const };
     }
     return { label: "Avatar Mismatch", variant: "destructive" as const };
@@ -61,9 +66,18 @@
         {state.lastSyncParamName}
       </span>
     {/if}
-    <div class="ml-auto">
+    <div class="ml-auto gap-1.5 flex items-center">
       <Badge variant={avatarBadge.variant} class="text-[10px] px-1.5 py-0">
         {avatarBadge.label}
+        {#if state.avatarSyncActive && state.selfAvatarId === state.ownerAvatarId}
+          <a
+            class="ml-1 cursor-pointer"
+            href={`vrcsl://switchavatar?avatarId=${state.ownerAvatarId}`}
+            title="Switch to avatar using VRCSL"
+          >
+            <UserPen class="size-3.5" />
+          </a>
+        {/if}
       </Badge>
     </div>
   </div>
