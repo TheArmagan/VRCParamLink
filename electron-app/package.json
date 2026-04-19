@@ -1,6 +1,6 @@
 {
   "name": "vrcpl-app",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Link your avatar's parameters with your partner's avatar!",
   "main": "./out/main/index.js",
   "author": "Kıraç Armağan Önal",
